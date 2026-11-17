@@ -1,0 +1,71 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { EventIcons } from "@/lib/events/icons";
+import { cn } from "@/lib/utils";
+
+export const EVENT_ADMIN_NAV = [
+  { href: "dashboard", label: "Dashboard", icon: EventIcons.dashboard },
+  { href: "setup", label: "Setup", icon: EventIcons.setup },
+  { href: "categories", label: "Categories", icon: EventIcons.categories },
+  {
+    href: "submission-types",
+    label: "Submission Types",
+    icon: EventIcons.submissionTypes,
+  },
+  { href: "eligibility", label: "Eligibility", icon: EventIcons.eligibility },
+  { href: "members", label: "Members", icon: EventIcons.members },
+  { href: "settings", label: "Settings", icon: EventIcons.settings },
+] as const;
+
+export function eventSectionLabel(pathname: string, eventBase: string) {
+  for (const item of EVENT_ADMIN_NAV) {
+    const href = `${eventBase}/${item.href}`;
+    if (pathname === href || pathname.startsWith(`${href}/`)) {
+      return item.label;
+    }
+  }
+  return null;
+}
+
+export function EventAdminNav({
+  orgSlug,
+  eventSlug,
+  onNavigate,
+  className,
+}: {
+  orgSlug: string;
+  eventSlug: string;
+  onNavigate?: () => void;
+  className?: string;
+}) {
+  const pathname = usePathname();
+  const base = `/org/${orgSlug}/events/${eventSlug}`;
+
+  return (
+    <nav className={cn("flex flex-col gap-1 p-3", className)}>
+      {EVENT_ADMIN_NAV.map((item) => {
+        const href = `${base}/${item.href}`;
+        const active = pathname === href || pathname.startsWith(`${href}/`);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border-l-2 px-3 py-2 text-sm transition-colors",
+              active
+                ? "border-sidebar-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                : "border-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+            )}
+          >
+            <Icon className="size-4 shrink-0" />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

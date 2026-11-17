@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Abstract Management System — Module 1 schema
+// https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,296 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum OrgRole {
+  ORG_ADMIN
+  MEMBER
+}
+
+enum EventRoleType {
+  EVENT_ADMIN
+  TRACK_CHAIR
+  REVIEWER
+  FINANCE_OFFICER
+  SUBMITTER
+  DELEGATE
+}
+
+enum BlindMode {
+  NONE
+  SINGLE
+  DOUBLE
+}
+
+enum PresentationTypeCode {
+  ORAL
+  POSTER
+  ORAL_OR_POSTER
+}
+
+// ─── Prerequisites (no Module 1 CRUD APIs) ───────────────────────────────────
+
+model Organisation {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoPath  String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships         OrgMembership[]
+  events              Event[]
+  members             Member[]
+  auditLogs           AuditLog[]
+  categories          Category[]
+  submissionTypes     SubmissionType[]
+  presentationTypes   PresentationType[]
+  eligibilityRules    EligibilityRule[]
+  deadlineExtensions  DeadlineExtension[]
+
+  @@map("organisations")
+}
+
+model User {
+  id        String   @id // Supabase auth.users.id
+  email     String   @unique
+  fullName  String?
+  phone     String?
+  slmcNo    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships            OrgMembership[]
+  eventRoles             EventRole[]
+  chairedCategories      Category[]           @relation("CategoryChair")
+  deadlineExtensions     DeadlineExtension[]  @relation("ExtensionSubmitter")
+  createdExtensions      DeadlineExtension[]  @relation("ExtensionCreator")
+  auditLogs              AuditLog[]
+
+  @@map("users")
+}
+
+model OrgMembership {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  role      OrgRole  @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+  @@map("org_memberships")
+}
+
+model EventRole {
+  id          String        @id @default(cuid())
+  eventId     String
+  userId      String
+  role        EventRoleType
+  categoryIds String[]      @default([])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, role])
+  @@index([userId])
+  @@map("event_roles")
+}
+
+// ─── Module 1 — Event setup ──────────────────────────────────────────────────
+
+model Event {
+  id        String @id @default(cuid())
+  orgId     String
+  name      String
+  slug      String
+  edition   String?
+  venue     String?
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  logoPath          String?
+  bannerPath        String?
+  contactEmail      String?
+  contactPhone      String?
+  guidelinesRichText String?
+  guidelinesPdfPath String?
+  primaryColor      String?
+  blindMode         BlindMode @default(DOUBLE)
+  settings          Json      @default("{}")
+
+  // Key dates (UTC; display Asia/Colombo)
+  submissionOpenAt    DateTime?
+  submissionCloseAt   DateTime?
+  reviewDeadlineAt    DateTime?
+  notificationAt      DateTime?
+  earlyBirdEndAt      DateTime?
+  registrationCloseAt DateTime?
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  organisation       Organisation        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  roles              EventRole[]
+  categories         Category[]
+  submissionTypes    SubmissionType[]
+  presentationTypes  PresentationType[]
+  eligibilityRule    EligibilityRule?
+  deadlineExtensions DeadlineExtension[]
+  auditLogs          AuditLog[]
+
+  @@unique([orgId, slug])
+  @@index([orgId])
+  @@map("events")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  orgId       String
+  eventId     String
+  name        String
+  chairUserId String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  chair        User?        @relation("CategoryChair", fields: [chairUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("categories")
+}
+
+model SubmissionType {
+  id          String   @id @default(cuid())
+  orgId       String
+  eventId     String
+  name        String
+  wordLimit   Int      @default(300)
+  /// Default IMRaD sections; editable per type
+  sections    Json     @default("[{\"key\":\"introduction\",\"label\":\"Introduction\"},{\"key\":\"objectives\",\"label\":\"Objectives\"},{\"key\":\"methods\",\"label\":\"Methods\"},{\"key\":\"results\",\"label\":\"Results\"},{\"key\":\"conclusions\",\"label\":\"Conclusions\"}]")
+  requiresErc Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("submission_types")
+}
+
+model PresentationType {
+  id        String               @id @default(cuid())
+  orgId     String
+  eventId   String
+  code      PresentationTypeCode
+  label     String
+  isActive  Boolean              @default(true)
+  sortOrder Int                  @default(0)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, code])
+  @@index([eventId])
+  @@index([orgId])
+  @@map("presentation_types")
+}
+
+model EligibilityRule {
+  id                            String   @id @default(cuid())
+  orgId                         String
+  eventId                       String   @unique
+  maxAbstractsPerAuthor         Int      @default(2)
+  requireMemberAuthor           Boolean  @default(false)
+  presentingAuthorMustRegister  Boolean  @default(true)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("eligibility_rules")
+}
+
+model Member {
+  id           String   @id @default(cuid())
+  orgId        String
+  name         String
+  membershipNo String?
+  slmcNo       String?
+  email        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, membershipNo])
+  @@index([orgId, email])
+  @@map("members")
+}
+
+model DeadlineExtension {
+  id              String   @id @default(cuid())
+  orgId           String
+  eventId         String
+  submitterUserId String
+  extendsUntil    DateTime
+  reason          String?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submitter    User         @relation("ExtensionSubmitter", fields: [submitterUserId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ExtensionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submitterUserId])
+  @@map("deadline_extensions")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  eventId   String?
+  actorId   String
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  actor        User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([eventId])
+  @@index([actorId])
+  @@map("audit_logs")
 }
