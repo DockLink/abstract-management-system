@@ -6,6 +6,7 @@ import "@/lib/openapi/paths/auth";
 import "@/lib/openapi/paths/orgs";
 import "@/lib/openapi/paths/events";
 import "@/lib/openapi/paths/public";
+import "@/lib/openapi/paths/submissions";
 
 export function buildOpenApiDocument() {
   // OpenAPI 3.0 is more reliable with swagger-ui-react under Turbopack than 3.1.
@@ -32,6 +33,10 @@ export function buildOpenApiDocument() {
       { name: "EventMembers" },
       { name: "DeadlineExtensions" },
       { name: "Roles" },
+      { name: "Submissions" },
+      { name: "FormFields" },
+      { name: "Authors" },
+      { name: "Affiliations" },
       { name: "Public" },
     ],
   });

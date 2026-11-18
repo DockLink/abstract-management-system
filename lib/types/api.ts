@@ -215,3 +215,124 @@ export type LoginResponse = {
   isPlatformAdmin: boolean;
   user: MeResponse["user"];
 };
+
+export type FormFieldType =
+  | "TEXT"
+  | "LONG_TEXT"
+  | "DROPDOWN"
+  | "CHECKBOX"
+  | "RADIO"
+  | "FILE_UPLOAD"
+  | "NUMBER"
+  | "DATE";
+
+export type FormFieldDto = {
+  id: string;
+  orgId: string;
+  eventId: string;
+  submissionTypeId: string;
+  label: string;
+  type: FormFieldType;
+  options: string[] | null;
+  required: boolean;
+  helpText: string | null;
+  sortOrder: number;
+  condition: { fieldId: string; value: unknown } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SubmissionAuthorDto = {
+  id: string;
+  submissionId: string;
+  surname: string;
+  initials: string;
+  email: string;
+  institution: string | null;
+  designation: string | null;
+  slmcNo: string | null;
+  membershipNo: string | null;
+  affiliationNos: number[];
+  isPresenting: boolean;
+  isCorresponding: boolean;
+  sortOrder: number;
+};
+
+export type SubmissionAffiliationDto = {
+  id: string;
+  submissionId: string;
+  number: number;
+  text: string;
+};
+
+export type SubmissionStatus =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "REVISIONS_REQUESTED"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "WAITLISTED"
+  | "CONFIRMED"
+  | "WITHDRAWN";
+
+export type SubmissionDto = {
+  id: string;
+  orgId: string;
+  eventId: string;
+  refNo: string | null;
+  submitterId: string;
+  submissionTypeId: string;
+  categoryId: string | null;
+  title: string;
+  status: SubmissionStatus;
+  preferredPresentationType: "oral" | "poster" | "either" | null;
+  abstractBody: Record<string, string>;
+  keywords: string[];
+  wordCount: number;
+  customFieldValues: Record<string, unknown>;
+  ercStatus: "APPROVED" | "EXEMPT" | "NOT_APPLICABLE" | null;
+  ercInstitution: string | null;
+  ercRefNo: string | null;
+  hasErcFile: boolean;
+  declarations: {
+    allAuthorsConsented?: boolean;
+    noIdentifiablePatientData?: boolean;
+    conflictOfInterest?: boolean;
+    conflictOfInterestDetails?: string;
+    previouslyPresentedOrPublished?: boolean;
+    previouslyPresentedOrPublishedDetails?: string;
+  };
+  prevPublishedDetails: string | null;
+  submittedAt: string | null;
+  withdrawnAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  authors?: SubmissionAuthorDto[];
+  affiliations?: SubmissionAffiliationDto[];
+};
+
+export type MySubmissionItemDto = SubmissionDto & {
+  event: {
+    id: string;
+    name: string;
+    slug: string;
+    orgSlug: string;
+    orgName: string;
+    portalState: PortalState;
+    keyDates: KeyDates;
+  };
+  submissionTypeName: string;
+  categoryName: string | null;
+  canEdit: boolean;
+  canWithdraw: boolean;
+  registerCta: { label: string; url: string; confirmed: boolean } | null;
+};
+
+export type SubmissionVersionDto = {
+  id: string;
+  version: number;
+  content: unknown;
+  createdById: string;
+  createdAt: string;
+};

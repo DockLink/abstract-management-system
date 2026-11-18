@@ -184,3 +184,99 @@ export const publicEventParams = z.object({
   orgSlug: z.string().min(1),
   eventSlug: z.string().min(1),
 });
+
+export const orgEventSubmissionParams = orgEventParams.extend({
+  submissionId: z.string().min(1),
+});
+
+export const orgEventSubmissionAuthorParams = orgEventSubmissionParams.extend({
+  authorId: z.string().min(1),
+});
+
+export const orgEventSubmissionAffiliationParams = orgEventSubmissionParams.extend({
+  affiliationId: z.string().min(1),
+});
+
+export const orgEventSubmissionTypeFormFieldParams = orgEventSubmissionTypeParams.extend({
+  fieldId: z.string().min(1),
+});
+
+export const submissionAuthorOpenApiSchema = z
+  .object({
+    id: z.string(),
+    submissionId: z.string(),
+    surname: z.string(),
+    initials: z.string(),
+    email: z.string().email(),
+    institution: z.string().nullable().optional(),
+    designation: z.string().nullable().optional(),
+    slmcNo: z.string().nullable().optional(),
+    membershipNo: z.string().nullable().optional(),
+    affiliationNos: z.array(z.number().int()),
+    isPresenting: z.boolean(),
+    isCorresponding: z.boolean(),
+    sortOrder: z.number().int(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+  })
+  .openapi("SubmissionAuthor");
+
+export const submissionAffiliationOpenApiSchema = z
+  .object({
+    id: z.string(),
+    submissionId: z.string(),
+    number: z.number().int(),
+    text: z.string(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+  })
+  .openapi("SubmissionAffiliation");
+
+export const formFieldOpenApiSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    eventId: z.string(),
+    submissionTypeId: z.string(),
+    label: z.string(),
+    type: z.enum(["TEXT", "LONG_TEXT", "DROPDOWN", "CHECKBOX", "RADIO", "FILE_UPLOAD", "NUMBER", "DATE"]),
+    options: z.unknown().nullable().optional(),
+    required: z.boolean(),
+    helpText: z.string().nullable().optional(),
+    sortOrder: z.number().int(),
+    condition: z.unknown().nullable().optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("FormField");
+
+export const submissionOpenApiSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    eventId: z.string(),
+    refNo: z.string().nullable(),
+    submitterId: z.string(),
+    submissionTypeId: z.string(),
+    categoryId: z.string().nullable(),
+    title: z.string(),
+    status: z.string(),
+    preferredPresentationType: z.string().nullable(),
+    abstractBody: z.record(z.string(), z.unknown()),
+    keywords: z.array(z.string()),
+    wordCount: z.number().int(),
+    customFieldValues: z.record(z.string(), z.unknown()),
+    ercStatus: z.string().nullable(),
+    ercInstitution: z.string().nullable(),
+    ercRefNo: z.string().nullable(),
+    hasErcFile: z.boolean(),
+    declarations: z.record(z.string(), z.unknown()),
+    prevPublishedDetails: z.string().nullable(),
+    submittedAt: z.string().datetime().nullable(),
+    withdrawnAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    authors: z.array(submissionAuthorOpenApiSchema).optional(),
+    affiliations: z.array(submissionAffiliationOpenApiSchema).optional(),
+  })
+  .openapi("Submission");

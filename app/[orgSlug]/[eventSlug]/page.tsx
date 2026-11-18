@@ -160,13 +160,16 @@ export default async function PublicEventPage({
         <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           {portalState.canSubmit ? (
             <Button asChild className="h-11 px-8">
-              <a href="#">Submit abstract</a>
+              <a href={`/${orgSlug}/${eventSlug}/submit`}>Submit abstract</a>
             </Button>
           ) : (
             <Button className="h-11 px-8" disabled>
               Submissions closed
             </Button>
           )}
+          <Button asChild variant="outline" className="h-11 px-6">
+            <a href={`/${orgSlug}/${eventSlug}/my-submissions`}>My submissions</a>
+          </Button>
           {!portalState.canSubmit ? (
             <p className="text-sm text-muted-foreground">
               Submissions are not open at this time.

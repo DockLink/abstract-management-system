@@ -49,15 +49,17 @@ model Organisation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships         OrgMembership[]
-  events              Event[]
-  members             Member[]
-  auditLogs           AuditLog[]
-  categories          Category[]
-  submissionTypes     SubmissionType[]
-  presentationTypes   PresentationType[]
-  eligibilityRules    EligibilityRule[]
-  deadlineExtensions  DeadlineExtension[]
+  memberships        OrgMembership[]
+  events             Event[]
+  members            Member[]
+  auditLogs          AuditLog[]
+  categories         Category[]
+  submissionTypes    SubmissionType[]
+  presentationTypes  PresentationType[]
+  eligibilityRules   EligibilityRule[]
+  deadlineExtensions DeadlineExtension[]
+  formFields         FormField[]
+  submissions        Submission[]
 
   @@map("organisations")
 }
@@ -71,12 +73,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships            OrgMembership[]
-  eventRoles             EventRole[]
-  chairedCategories      Category[]           @relation("CategoryChair")
-  deadlineExtensions     DeadlineExtension[]  @relation("ExtensionSubmitter")
-  createdExtensions      DeadlineExtension[]  @relation("ExtensionCreator")
-  auditLogs              AuditLog[]
+  memberships        OrgMembership[]
+  eventRoles         EventRole[]
+  chairedCategories  Category[]          @relation("CategoryChair")
+  deadlineExtensions DeadlineExtension[] @relation("ExtensionSubmitter")
+  createdExtensions  DeadlineExtension[] @relation("ExtensionCreator")
+  auditLogs          AuditLog[]
+  submissions        Submission[]        @relation("SubmissionSubmitter")
+  submissionVersions SubmissionVersion[] @relation("VersionCreator")
 
   @@map("users")
 }
@@ -117,25 +121,25 @@ model EventRole {
 // ─── Module 1 — Event setup ──────────────────────────────────────────────────
 
 model Event {
-  id        String @id @default(cuid())
-  orgId     String
-  name      String
-  slug      String
-  edition   String?
-  venue     String?
+  id      String  @id @default(cuid())
+  orgId   String
+  name    String
+  slug    String
+  edition String?
+  venue   String?
 
   startsAt DateTime?
   endsAt   DateTime?
 
-  logoPath          String?
-  bannerPath        String?
-  contactEmail      String?
-  contactPhone      String?
+  logoPath           String?
+  bannerPath         String?
+  contactEmail       String?
+  contactPhone       String?
   guidelinesRichText String?
-  guidelinesPdfPath String?
-  primaryColor      String?
-  blindMode         BlindMode @default(DOUBLE)
-  settings          Json      @default("{}")
+  guidelinesPdfPath  String?
+  primaryColor       String?
+  blindMode          BlindMode @default(DOUBLE)
+  settings           Json      @default("{}")
 
   // Key dates (UTC; display Asia/Colombo)
   submissionOpenAt    DateTime?
@@ -157,6 +161,8 @@ model Event {
   eligibilityRule    EligibilityRule?
   deadlineExtensions DeadlineExtension[]
   auditLogs          AuditLog[]
+  submissions        Submission[]
+  formFields         FormField[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -176,6 +182,7 @@ model Category {
   organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   chair        User?        @relation("CategoryChair", fields: [chairUserId], references: [id], onDelete: SetNull)
+  submissions  Submission[]
 
   @@index([eventId])
   @@index([orgId])
@@ -197,6 +204,8 @@ model SubmissionType {
 
   organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  formFields   FormField[]
+  submissions  Submission[]
 
   @@index([eventId])
   @@index([orgId])
@@ -224,14 +233,14 @@ model PresentationType {
 }
 
 model EligibilityRule {
-  id                            String   @id @default(cuid())
-  orgId                         String
-  eventId                       String   @unique
-  maxAbstractsPerAuthor         Int      @default(2)
-  requireMemberAuthor           Boolean  @default(false)
-  presentingAuthorMustRegister  Boolean  @default(true)
-  createdAt                     DateTime @default(now())
-  updatedAt                     DateTime @updatedAt
+  id                           String   @id @default(cuid())
+  orgId                        String
+  eventId                      String   @unique
+  maxAbstractsPerAuthor        Int      @default(2)
+  requireMemberAuthor          Boolean  @default(false)
+  presentingAuthorMustRegister Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
 
   organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
   event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -300,4 +309,157 @@ model AuditLog {
   @@index([eventId])
   @@index([actorId])
   @@map("audit_logs")
+}
+
+// ─── Module 2 — Submission Portal ────────────────────────────────────────────
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISIONS_REQUESTED
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+  CONFIRMED
+  WITHDRAWN
+}
+
+enum ErcStatus {
+  APPROVED
+  EXEMPT
+  NOT_APPLICABLE
+}
+
+enum FormFieldType {
+  TEXT
+  LONG_TEXT
+  DROPDOWN
+  CHECKBOX
+  RADIO
+  FILE_UPLOAD
+  NUMBER
+  DATE
+}
+
+model FormField {
+  id               String        @id @default(cuid())
+  orgId            String
+  eventId          String
+  submissionTypeId String
+  label            String
+  type             FormFieldType
+  options          Json?
+  required         Boolean       @default(false)
+  helpText         String?
+  sortOrder        Int           @default(0)
+  condition        Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  organisation   Organisation   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submissionType SubmissionType @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
+
+  @@index([submissionTypeId])
+  @@index([eventId])
+  @@index([orgId])
+  @@map("form_fields")
+}
+
+model Submission {
+  id                        String           @id @default(cuid())
+  orgId                     String
+  eventId                   String
+  refNo                     String?
+  submitterId               String
+  submissionTypeId          String
+  categoryId                String?
+  title                     String
+  status                    SubmissionStatus @default(DRAFT)
+  preferredPresentationType String?
+  abstractBody              Json
+  keywords                  String[]         @default([])
+  wordCount                 Int              @default(0)
+  customFieldValues         Json             @default("{}")
+  ercStatus                 ErcStatus?
+  ercInstitution            String?
+  ercRefNo                  String?
+  ercFilePath               String?
+  prevPublishedDetails      String?
+  declarations              Json             @default("{}")
+  submittedAt               DateTime?
+  withdrawnAt               DateTime?
+  deletedAt                 DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  organisation   Organisation            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event          Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submitter      User                    @relation("SubmissionSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  submissionType SubmissionType          @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
+  category       Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  authors        SubmissionAuthor[]
+  affiliations   SubmissionAffiliation[]
+  versions       SubmissionVersion[]
+
+  @@unique([eventId, refNo])
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submitterId])
+  @@map("submissions")
+}
+
+model SubmissionAuthor {
+  id              String   @id @default(cuid())
+  submissionId    String
+  surname         String
+  initials        String
+  email           String
+  institution     String?
+  designation     String?
+  slmcNo          String?
+  membershipNo    String?
+  affiliationNos  Int[]    @default([])
+  isPresenting    Boolean  @default(false)
+  isCorresponding Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("submission_authors")
+}
+
+model SubmissionAffiliation {
+  id           String   @id @default(cuid())
+  submissionId String
+  number       Int
+  text         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, number])
+  @@index([submissionId])
+  @@map("submission_affiliations")
+}
+
+model SubmissionVersion {
+  id           String   @id @default(cuid())
+  submissionId String
+  version      Int
+  content      Json
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("VersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, version])
+  @@index([submissionId])
+  @@map("submission_versions")
 }

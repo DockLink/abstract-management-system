@@ -14,6 +14,7 @@ export const EVENT_ADMIN_NAV = [
     label: "Submission Types",
     icon: EventIcons.submissionTypes,
   },
+  { href: "submissions", label: "Submissions", icon: EventIcons.submissions },
   { href: "eligibility", label: "Eligibility", icon: EventIcons.eligibility },
   { href: "members", label: "Members", icon: EventIcons.members },
   { href: "settings", label: "Settings", icon: EventIcons.settings },

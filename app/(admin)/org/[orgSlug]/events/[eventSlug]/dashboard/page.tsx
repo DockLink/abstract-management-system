@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { KeyDateTimeline } from "@/components/shared/key-date-timeline";
 import { DashboardCharts } from "@/components/setup/dashboard-charts";
@@ -98,6 +99,14 @@ export default async function EventDashboardPage({
           title="Total submissions"
           value={String(totalSubmissions)}
           description="Across all statuses"
+          footer={
+            <Link
+              href={`/org/${orgSlug}/events/${eventSlug}/submissions`}
+              className="text-xs font-semibold text-primary hover:underline inline-block mt-1"
+            >
+              View all submissions &rarr;
+            </Link>
+          }
         />
         <StatCard
           title="Reviews"

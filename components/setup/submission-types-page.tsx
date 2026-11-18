@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Pencil } from "lucide-react";
+import { FormBuilderDialog } from "@/components/setup/form-builder-dialog";
+import { Layers, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -65,6 +66,7 @@ export function SubmissionTypesPage({
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<SubmissionTypeDto | null>(null);
+  const [builderType, setBuilderType] = useState<SubmissionTypeDto | null>(null);
   const [name, setName] = useState("");
   const [wordLimit, setWordLimit] = useState("300");
   const [requiresErc, setRequiresErc] = useState(false);
@@ -192,21 +194,15 @@ export function SubmissionTypesPage({
                       ))}
                     </ul>
                   </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-block w-fit">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-10"
-                          disabled
-                        >
-                          Edit form fields
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>Coming in form builder</TooltipContent>
-                  </Tooltip>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 w-fit gap-1.5"
+                    onClick={() => setBuilderType(type)}
+                  >
+                    <Layers className="size-4" />
+                    Edit form fields & sections
+                  </Button>
                   {type.requiresErc ? (
                     <p className="text-xs text-muted-foreground">
                       Ethics (ERC) declaration required
@@ -304,6 +300,14 @@ export function SubmissionTypesPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <FormBuilderDialog
+        open={!!builderType}
+        onOpenChange={(open) => !open && setBuilderType(null)}
+        submissionType={builderType}
+        orgId={orgId}
+        eventId={eventId}
+        onUpdated={load}
+      />
     </div>
   );
 }
