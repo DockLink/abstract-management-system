@@ -1,108 +1,49 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { EventLifecycleStatus } from "@/lib/events/status";
+import {
+  STATUS_MAP,
+  STATUS_TONE_CLASS,
+  normalizeStatus,
+  type StatusKey,
+  type StatusTone,
+} from "@/lib/status";
 
-export type StatusKey =
-  | EventLifecycleStatus
-  | "pending"
-  | "confirmed"
-  | "member"
-  | "rejected"
-  | "accepted"
-  | "waitlisted"
-  | "submitted"
-  | "under_review"
-  | "info"
-  | "warning"
-  | "success"
-  | "destructive";
+export type { StatusKey, StatusTone };
 
-const STATUS_MAP: Record<
-  StatusKey,
-  { label: string; className: string }
-> = {
-  draft: {
-    label: "Draft",
-    className: "border-transparent bg-info-tint text-info-foreground",
-  },
-  open: {
-    label: "Open for submissions",
-    className: "border-transparent bg-success-tint text-success-foreground",
-  },
-  closed: {
-    label: "Closed",
-    className: "border-transparent bg-destructive-tint text-destructive",
-  },
-  pending: {
-    label: "Pending",
-    className: "border-transparent bg-warning-tint text-warning-foreground",
-  },
-  confirmed: {
-    label: "Confirmed",
-    className: "border-transparent bg-success-tint text-success-foreground",
-  },
-  member: {
-    label: "Member",
-    className: "border-transparent bg-success-tint text-success-foreground",
-  },
-  rejected: {
-    label: "Rejected",
-    className: "border-transparent bg-destructive-tint text-destructive",
-  },
-  accepted: {
-    label: "Accepted",
-    className: "border-transparent bg-success-tint text-success-foreground",
-  },
-  waitlisted: {
-    label: "Waitlisted",
-    className: "border-transparent bg-warning-tint text-warning-foreground",
-  },
-  submitted: {
-    label: "Submitted",
-    className: "border-transparent bg-info-tint text-info-foreground",
-  },
-  under_review: {
-    label: "Under review",
-    className: "border-transparent bg-info-tint text-info-foreground",
-  },
-  info: {
-    label: "Info",
-    className: "border-transparent bg-info-tint text-info-foreground",
-  },
-  warning: {
-    label: "Warning",
-    className: "border-transparent bg-warning-tint text-warning-foreground",
-  },
-  success: {
-    label: "Success",
-    className: "border-transparent bg-success-tint text-success-foreground",
-  },
-  destructive: {
-    label: "Error",
-    className: "border-transparent bg-destructive-tint text-destructive",
-  },
-};
-
+/**
+ * The only way to show a status. Colour is never the sole signal: the label is
+ * always present and the leading dot keeps chips distinguishable in greyscale.
+ *
+ *   <StatusBadge status="under_review" />
+ *   <StatusBadge status={submission.status} />   // "UNDER_REVIEW" works too
+ */
 export function StatusBadge({
   status,
   label,
+  size = "default",
   className,
 }: {
-  status: StatusKey;
+  status: StatusKey | (string & {});
   label?: string;
+  size?: "default" | "sm";
   className?: string;
 }) {
-  const mapped = STATUS_MAP[status];
+  const key = normalizeStatus(status);
+  const entry = key ? STATUS_MAP[key] : null;
+  const tone: StatusTone = entry?.tone ?? "draft";
+
   return (
-    <Badge
-      variant="outline"
+    <span
+      data-slot="status-badge"
+      data-status={key ?? status}
       className={cn(
-        "rounded-md px-2 py-0.5 text-xs font-medium",
-        mapped.className,
+        "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-md font-medium whitespace-nowrap",
+        size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-2.5 text-sm",
+        STATUS_TONE_CLASS[tone],
         className,
       )}
     >
-      {label ?? mapped.label}
-    </Badge>
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+      {label ?? entry?.label ?? status}
+    </span>
   );
 }

@@ -2,137 +2,388 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * AMS design tokens
+ * ─────────────────
+ * Direction (docs/ui-audit.md §4): "the good hospital chart" — quiet, ordered,
+ * legible at arm's length. Ink on cool paper, one action colour (the event's
+ * brand), tinted status pairs, 1px rules instead of shadows.
+ *
+ * Layers
+ *   1. Primitives   — raw scales (--ink-*, --paper-*), never used in components.
+ *   2. Semantic     — --background, --foreground, --brand, --success … (light + .dark).
+ *   3. Tailwind     — @theme maps semantic tokens to utilities (bg-brand, text-status-accepted…).
+ *
+ * Brand (GEN-02): every brand-derived token is declared on `:root` AND on
+ * `[data-brand-scope]`. Custom properties that reference var(--brand) resolve
+ * where they are declared, so a subtree that overrides --brand must re-declare
+ * the derived tokens too. Use <BrandScope color="#..."> rather than setting
+ * --brand by hand.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── 1. Primitives ─────────────────────────────────────────────────────── */
+
+:root {
+  /* Ink — cool blue-green greys, text and rules */
+  --ink-950: #121a20;
+  --ink-900: #1f2933;
+  --ink-800: #2e3a44;
+  --ink-700: #3e4b55;
+  --ink-600: #4f5c66;
+  --ink-500: #5b6770;
+  --ink-400: #8f9a94;
+  --ink-300: #b9c2bd;
+  --ink-200: #d9dedb;
+  --ink-100: #e8ece9;
+  --ink-50: #f7f8f6;
+
+  /* Default brand — deep clinical teal (AA on white: 6.0:1) */
+  --teal-700: #0f6e6a;
+}
+
+/* ─── 2. Semantic tokens — light ────────────────────────────────────────── */
+
+:root {
+  /* Page & surfaces */
+  --background: #ffffff; /* cards, inputs, sheets */
+  --surface: var(--ink-50); /* page canvas ("paper") */
+  --foreground: var(--ink-900);
+  --muted: #eef1ef;
+  --muted-foreground: var(--ink-500); /* 5.9:1 on white, 5.5:1 on paper */
+  --border: var(--ink-200); /* hairline rules */
+  --input: var(--ink-400); /* control outlines — 3:1 non-text contrast */
+
+  --card: #ffffff;
+  --card-foreground: var(--ink-900);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink-900);
+
+  --secondary: #eef1ef;
+  --secondary-foreground: var(--ink-900);
+
+  /* Brand (overridable per event) */
+  --brand: var(--teal-700);
+  --brand-foreground: #ffffff;
+
+  /* Semantic feedback colours: solid / tint (background) / foreground (text on tint) */
+  --success: #2f7d4f;
+  --success-tint: #e8f4ec;
+  --success-foreground: #1d5a37;
+
+  --warning: #b26b00;
+  --warning-tint: #fdf3e1;
+  --warning-foreground: #7a4a00;
+
+  --danger: #c2372f;
+  --danger-tint: #fbeceb;
+  --danger-foreground: #8f2620;
+  --danger-solid: #c2372f; /* fill for destructive confirm buttons */
+  --danger-solid-foreground: #ffffff;
+
+  --info: #2d6cb5;
+  --info-tint: #eaf1fa;
+  --info-foreground: #1f4f88;
+
+  /* Status pairs (tint / ink). Canonical map lives in lib/status.ts. */
+  --status-draft: #eceeed;
+  --status-draft-foreground: #47525b;
+  --status-submitted: #e7effa;
+  --status-submitted-foreground: #1f4f88;
+  --status-review: #fbf0d9;
+  --status-review-foreground: #7a4a00;
+  --status-accepted: #e6f3ea;
+  --status-accepted-foreground: #1d5a37;
+  --status-rejected: #fbeceb;
+  --status-rejected-foreground: #8f2620;
+  --status-confirmed: #dff3ec;
+  --status-confirmed-foreground: #0b5c48;
+  --status-waitlisted: #f1ebfa;
+  --status-waitlisted-foreground: #5b3592;
+  --status-revisions: #fdeee2;
+  --status-revisions-foreground: #8a3f0c;
+
+  /* Overlay elevation — the only shadow in the system */
+  --overlay-shadow: 0 16px 40px -12px rgb(18 26 32 / 0.22),
+    0 2px 6px rgb(18 26 32 / 0.08);
+  --scrim: rgb(18 26 32 / 0.45);
+}
+
+/* Brand-derived tokens: re-declared wherever --brand can change. */
+:root,
+[data-brand-scope] {
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --primary-hover: color-mix(in oklch, var(--brand) 84%, black);
+  --primary-tint: color-mix(in oklch, var(--brand) 9%, white);
+  /* Brand-coloured text on light surfaces. brandStyle() supplies
+     --brand-ink-light (pre-darkened to ≥ 4.5:1) for light brand colours. */
+  --brand-ink: var(
+    --brand-ink-light,
+    color-mix(in oklch, var(--brand) 88%, var(--ink-950))
+  );
+  --accent: var(--primary-tint);
+  --accent-foreground: var(--brand-ink);
+  --ring: var(--brand);
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--ink-900);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
+  --sidebar-accent: var(--primary-tint);
+  --sidebar-accent-foreground: var(--brand-ink);
+  --sidebar-border: var(--ink-200);
+  --sidebar-ring: var(--brand);
+
+  --chart-1: var(--brand);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: #6b46a8;
+}
+
+/* Legacy aliases — existing screens use destructive-*; new code uses danger-*. */
+:root {
+  --destructive: var(--danger);
+  --destructive-tint: var(--danger-tint);
+  --destructive-foreground: var(--danger-solid-foreground);
+}
+
+/* ─── 2b. Semantic tokens — dark ────────────────────────────────────────── */
+
+.dark {
+  color-scheme: dark;
+
+  --background: #172027;
+  --surface: #11181d;
+  --foreground: #e9eeeb;
+  --muted: #222d34;
+  --muted-foreground: #a3aea8;
+  --border: #2c3840;
+  --input: #5d6a72;
+
+  --card: #172027;
+  --card-foreground: #e9eeeb;
+  --popover: #1c262d;
+  --popover-foreground: #e9eeeb;
+
+  --secondary: #222d34;
+  --secondary-foreground: #e9eeeb;
+
+  --success: #5fbf86;
+  --success-tint: #173226;
+  --success-foreground: #9fdcb7;
+
+  --warning: #e0a443;
+  --warning-tint: #33270f;
+  --warning-foreground: #f1cd8c;
+
+  --danger: #e5625a;
+  --danger-tint: #3a1d1c;
+  --danger-foreground: #f4a9a3;
+  --danger-solid: #b3362e; /* white text 5.4:1 */
+  --danger-solid-foreground: #ffffff;
+
+  --info: #6fa3e0;
+  --info-tint: #182a40;
+  --info-foreground: #a9c9f0;
+
+  --status-draft: #2a343b;
+  --status-draft-foreground: #c4cdc8;
+  --status-submitted: #182a40;
+  --status-submitted-foreground: #a9c9f0;
+  --status-review: #33270f;
+  --status-review-foreground: #f1cd8c;
+  --status-accepted: #173226;
+  --status-accepted-foreground: #9fdcb7;
+  --status-rejected: #3a1d1c;
+  --status-rejected-foreground: #f4a9a3;
+  --status-confirmed: #0f3329;
+  --status-confirmed-foreground: #8fe0c6;
+  --status-waitlisted: #2a2140;
+  --status-waitlisted-foreground: #cdb6f2;
+  --status-revisions: #3a2414;
+  --status-revisions-foreground: #f5b98a;
+
+  --overlay-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.6),
+    0 2px 6px rgb(0 0 0 / 0.4);
+  --scrim: rgb(0 0 0 / 0.6);
+}
+
+.dark,
+.dark [data-brand-scope],
+[data-brand-scope].dark {
+  --primary-hover: color-mix(in oklch, var(--brand) 80%, white);
+  --primary-tint: color-mix(in oklch, var(--brand) 24%, #172027);
+  --brand-ink: color-mix(in oklch, var(--brand) 45%, white);
+  --accent: var(--primary-tint);
+  --accent-foreground: var(--brand-ink);
+  --sidebar: #172027;
+  --sidebar-foreground: #e9eeeb;
+  --sidebar-accent: var(--primary-tint);
+  --sidebar-accent-foreground: var(--brand-ink);
+  --sidebar-border: #2c3840;
+  --chart-5: #a98be0;
+}
+
+/* ─── 3. Tailwind theme ─────────────────────────────────────────────────── */
 
 @theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-surface: hsl(var(--surface));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-primary-hover: hsl(var(--primary-hover));
-  --color-primary-tint: hsl(var(--primary-tint));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-destructive-tint: hsl(var(--destructive-tint));
-  --color-success: hsl(var(--success));
-  --color-success-foreground: hsl(var(--success-foreground));
-  --color-success-tint: hsl(var(--success-tint));
-  --color-warning: hsl(var(--warning));
-  --color-warning-foreground: hsl(var(--warning-foreground));
-  --color-warning-tint: hsl(var(--warning-tint));
-  --color-info: hsl(var(--info));
-  --color-info-foreground: hsl(var(--info-foreground));
-  --color-info-tint: hsl(var(--info-tint));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --color-chart-1: hsl(var(--chart-1));
-  --color-chart-2: hsl(var(--chart-2));
-  --color-chart-3: hsl(var(--chart-3));
-  --color-chart-4: hsl(var(--chart-4));
-  --color-chart-5: hsl(var(--chart-5));
-  --color-sidebar: hsl(var(--sidebar));
-  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
-  --color-sidebar-primary: hsl(var(--sidebar-primary));
-  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
-  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-ring: hsl(var(--sidebar-ring));
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-inter);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Colours */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-ink: var(--brand-ink);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-tint: var(--primary-tint);
+
+  --color-success: var(--success);
+  --color-success-tint: var(--success-tint);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-foreground: var(--danger-solid-foreground);
+  --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
+  --color-info-foreground: var(--info-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-status-draft: var(--status-draft);
+  --color-status-draft-foreground: var(--status-draft-foreground);
+  --color-status-submitted: var(--status-submitted);
+  --color-status-submitted-foreground: var(--status-submitted-foreground);
+  --color-status-review: var(--status-review);
+  --color-status-review-foreground: var(--status-review-foreground);
+  --color-status-accepted: var(--status-accepted);
+  --color-status-accepted-foreground: var(--status-accepted-foreground);
+  --color-status-rejected: var(--status-rejected);
+  --color-status-rejected-foreground: var(--status-rejected-foreground);
+  --color-status-confirmed: var(--status-confirmed);
+  --color-status-confirmed-foreground: var(--status-confirmed-foreground);
+  --color-status-waitlisted: var(--status-waitlisted);
+  --color-status-waitlisted-foreground: var(--status-waitlisted-foreground);
+  --color-status-revisions: var(--status-revisions);
+  --color-status-revisions-foreground: var(--status-revisions-foreground);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Typography — fonts are loaded with next/font in app/layout.tsx */
+  --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+  --font-heading: var(--font-source-serif), ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Shadow — rules, not shadows; one elevation for overlays */
+  --shadow-overlay: var(--overlay-shadow);
+}
+
+@theme {
+  /* Type scale — 13px floor, 16px body. Overrides Tailwind defaults so every
+     existing text-xs / text-sm also becomes legible. */
+  --text-xs: 0.8125rem; /* 13px — captions, badges */
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.9375rem; /* 15px — dense tables, secondary copy */
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem; /* 16px — body */
+  --text-base--line-height: 1.55;
+  --text-lg: 1.125rem; /* 18px */
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.25rem; /* 20px — section titles */
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.5rem; /* 24px — page titles (mobile) */
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 1.875rem; /* 30px — page titles (desktop) */
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 2.25rem; /* 36px — public event name */
+  --text-4xl--line-height: 1.15;
+
+  /* Radius — controls 6px, cards 8px */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-4xl: 9999px;
+
+  /* Spacing — 4px base (Tailwind default) plus named layout steps */
+  --spacing-control: 2.75rem; /* 44px — minimum touch target: h-control, size-control */
+  --spacing-control-sm: 2.25rem; /* 36px — dense desktop-only controls */
+  --spacing-gutter: 1rem; /* page side gutter on phones */
+  --spacing-section: 2rem; /* gap between page sections */
 }
 
 :root {
-  /* Page & text */
-  --background: 0 0% 100%;
-  --surface: 210 20% 98%;
-  --foreground: 215 25% 15%;
-  --muted-foreground: 215 15% 46%;
-  --border: 214 20% 90%;
-
-  --card: 0 0% 100%;
-  --card-foreground: 215 25% 15%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 215 25% 15%;
-
-  /* Brand — DocLink turquoise (single accent) */
-  --primary: 174 62% 35%;
-  --primary-foreground: 0 0% 100%;
-  --primary-hover: 174 65% 29%;
-  --primary-tint: 174 55% 94%;
-
-  --secondary: 215 25% 15%;
-  --secondary-foreground: 0 0% 100%;
-
-  --muted: 210 20% 96%;
-  --accent: 174 55% 94%;
-  --accent-foreground: 174 62% 29%;
-
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --destructive-tint: 0 70% 96%;
-
-  --success: 152 55% 38%;
-  --success-foreground: 152 55% 22%;
-  --success-tint: 152 50% 95%;
-
-  --warning: 38 92% 50%;
-  --warning-foreground: 38 80% 28%;
-  --warning-tint: 38 90% 95%;
-
-  --info: 210 80% 55%;
-  --info-foreground: 210 70% 30%;
-  --info-tint: 210 75% 96%;
-
-  --input: 214 20% 90%;
-  --ring: 174 62% 35%;
-
-  --chart-1: 174 62% 35%;
-  --chart-2: 152 55% 38%;
-  --chart-3: 210 80% 55%;
-  --chart-4: 38 92% 50%;
-  --chart-5: 0 72% 51%;
-
-  --radius: 0.625rem;
-
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 215 25% 15%;
-  --sidebar-primary: 174 62% 35%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 174 55% 94%;
-  --sidebar-accent-foreground: 174 62% 29%;
-  --sidebar-border: 214 20% 90%;
-  --sidebar-ring: 174 62% 35%;
+  /* shadcn primitives read --radius */
+  --radius: 0.5rem;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground text-sm antialiased;
-  }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-base text-foreground antialiased;
+    font-feature-settings: "kern", "liga";
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

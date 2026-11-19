@@ -76,11 +76,11 @@ export function AdminUserMenu() {
         <Button
           type="button"
           variant="ghost"
-          className="h-9 gap-2 px-2"
+          className="h-control gap-2 px-2"
           aria-label="Account menu"
         >
           <Avatar size="sm">
-            <AvatarFallback className="bg-primary-tint text-[10px] font-medium text-primary">
+            <AvatarFallback className="bg-primary-tint text-xs font-medium text-brand-ink">
               {me ? initials(me.fullName, me.email) : "…"}
             </AvatarFallback>
           </Avatar>

@@ -21,6 +21,29 @@ export function formatEventDate(
   return formatInTimeZone(date, EVENT_TZ, pattern);
 }
 
+/** House style date: "19 November 2026" (Asia/Colombo). */
+export function formatLongDate(value: Date | string | null | undefined): string {
+  const date = toDate(value);
+  if (!date) return "—";
+  return formatInTimeZone(date, EVENT_TZ, "d MMMM yyyy");
+}
+
+/** House style date + time: "19 November 2026, 11:59 pm" (Asia/Colombo). */
+export function formatLongDateTime(
+  value: Date | string | null | undefined,
+): string {
+  const date = toDate(value);
+  if (!date) return "—";
+  return formatInTimeZone(date, EVENT_TZ, "d MMMM yyyy, h:mm aaa");
+}
+
+/** Clock time for autosave stamps: "12:04" (24h, Asia/Colombo). */
+export function formatClockTime(value: Date | string | null | undefined): string {
+  const date = toDate(value);
+  if (!date) return "";
+  return formatInTimeZone(date, EVENT_TZ, "HH:mm");
+}
+
 export function toAsiaColombo(value: Date | string): Date {
   const date = toDate(value) ?? new Date();
   return toZonedTime(date, EVENT_TZ);

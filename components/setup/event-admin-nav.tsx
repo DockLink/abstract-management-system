@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AppShellNavLink } from "@/components/shared/app-shell";
 import { usePathname } from "next/navigation";
 import { EventIcons } from "@/lib/events/icons";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ export const EVENT_ADMIN_NAV = [
   { href: "categories", label: "Categories", icon: EventIcons.categories },
   {
     href: "submission-types",
-    label: "Submission Types",
+    label: "Submission types",
     icon: EventIcons.submissionTypes,
   },
   { href: "submissions", label: "Submissions", icon: EventIcons.submissions },
@@ -52,20 +52,15 @@ export function EventAdminNav({
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const Icon = item.icon;
         return (
-          <Link
+          <AppShellNavLink
             key={item.href}
             href={href}
             onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-2 rounded-lg border-l-2 px-3 py-2 text-sm transition-colors",
-              active
-                ? "border-sidebar-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                : "border-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-            )}
+            active={active}
           >
-            <Icon className="size-4 shrink-0" />
+            <Icon className="size-5 shrink-0" aria-hidden />
             {item.label}
-          </Link>
+          </AppShellNavLink>
         );
       })}
     </nav>
