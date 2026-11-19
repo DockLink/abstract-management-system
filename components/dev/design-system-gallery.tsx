@@ -128,7 +128,7 @@ export function DesignSystemGallery() {
         </div>
       </div>
 
-      <BrandScope color={brand}>
+      <BrandScope brand={brand}>
         {mode === "split" ? (
           <div className="grid xl:grid-cols-2">
             <div className="min-w-0 border-border xl:border-r">

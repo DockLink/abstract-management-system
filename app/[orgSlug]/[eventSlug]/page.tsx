@@ -47,7 +47,7 @@ export default async function PublicEventPage({
     : null;
 
   return (
-    <main className="min-h-screen bg-surface">
+    <div>
       <div className="mx-auto max-w-3xl px-4 py-10 md:py-14">
         {bannerUrl ? (
           <div className="relative mb-6 aspect-[2.4/1] overflow-hidden rounded-xl border border-border bg-muted">
@@ -180,6 +180,6 @@ export default async function PublicEventPage({
           ) : null}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

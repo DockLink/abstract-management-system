@@ -17,7 +17,7 @@
  * Brand (GEN-02): every brand-derived token is declared on `:root` AND on
  * `[data-brand-scope]`. Custom properties that reference var(--brand) resolve
  * where they are declared, so a subtree that overrides --brand must re-declare
- * the derived tokens too. Use <BrandScope color="#..."> rather than setting
+ * the derived tokens too. Use <BrandScope brand="#..."> rather than setting
  * --brand by hand.
  */
 

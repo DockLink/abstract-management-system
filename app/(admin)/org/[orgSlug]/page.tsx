@@ -1,4 +1,6 @@
 import { EventsListPage } from "@/components/setup/events-list-page";
+import { OrgShell } from "@/components/shell/org-shell";
+import { loadOrgShellData } from "@/lib/nav/shell-data";
 import { apiFetchServer } from "@/lib/api/server";
 import { resolveOrgBySlug } from "@/lib/events/resolve";
 import type { EventDto } from "@/lib/types/api";
@@ -11,7 +13,10 @@ export default async function OrgEventsPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const org = await resolveOrgBySlug(orgSlug);
+  const [org, shell] = await Promise.all([
+    resolveOrgBySlug(orgSlug),
+    loadOrgShellData(orgSlug),
+  ]);
 
   const result = await apiFetchServer<EventDto[]>(
     `/api/v1/orgs/${org.id}/events`,
@@ -20,11 +25,13 @@ export default async function OrgEventsPage({
   const events = result.ok ? result.data : [];
 
   return (
-    <EventsListPage
-      orgSlug={org.slug}
-      orgId={org.id}
-      orgName={org.name}
-      events={events}
-    />
+    <OrgShell data={shell}>
+      <EventsListPage
+        orgSlug={org.slug}
+        orgId={org.id}
+        orgName={org.name}
+        events={events}
+      />
+    </OrgShell>
   );
 }

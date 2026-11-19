@@ -25,14 +25,14 @@ export default async function EventReviewerDashboardRoute({
   const { orgId, eventId } = await resolveOrgEventBySlug(orgSlug, eventSlug);
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div>
       <ReviewerDashboard
         orgId={orgId}
         eventId={eventId}
         orgSlug={orgSlug}
         eventSlug={eventSlug}
       />
-    </main>
+    </div>
   );
 }
 

@@ -25,14 +25,14 @@ export default async function MySubmissionsPage({
   const { orgId, eventId } = await resolveOrgEventBySlug(orgSlug, eventSlug);
 
   return (
-    <main className="min-h-screen bg-surface">
+    <div>
       <SubmitterDashboard
         orgId={orgId}
         eventId={eventId}
         orgSlug={orgSlug}
         eventSlug={eventSlug}
       />
-    </main>
+    </div>
   );
 }
 

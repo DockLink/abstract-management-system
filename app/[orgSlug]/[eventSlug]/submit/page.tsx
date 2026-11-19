@@ -28,7 +28,7 @@ export default async function SubmitPage({
   const { orgId, eventId } = await resolveOrgEventBySlug(orgSlug, eventSlug);
 
   return (
-    <main className="min-h-screen bg-surface">
+    <div>
       <SubmissionFormWizard
         orgId={orgId}
         eventId={eventId}
@@ -36,6 +36,6 @@ export default async function SubmitPage({
         eventSlug={eventSlug}
         existingSubmissionId={existingSubmissionId || null}
       />
-    </main>
+    </div>
   );
 }
