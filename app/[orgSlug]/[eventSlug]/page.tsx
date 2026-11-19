@@ -170,6 +170,9 @@ export default async function PublicEventPage({
           <Button asChild variant="outline" className="h-11 px-6">
             <a href={`/${orgSlug}/${eventSlug}/my-submissions`}>My submissions</a>
           </Button>
+          <Button asChild variant="ghost" className="h-11 px-4 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+            <a href={`/${orgSlug}/${eventSlug}/reviews`}>Reviewer Portal &rarr;</a>
+          </Button>
           {!portalState.canSubmit ? (
             <p className="text-sm text-muted-foreground">
               Submissions are not open at this time.

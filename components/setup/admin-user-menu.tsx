@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { ClipboardCheck, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -99,6 +99,14 @@ export function AdminUserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            router.push("/my-reviews");
+          }}
+        >
+          <ClipboardCheck className="size-4" />
+          My Reviews
+        </DropdownMenuItem>
         <DropdownMenuItem
           disabled={loggingOut}
           onSelect={() => {

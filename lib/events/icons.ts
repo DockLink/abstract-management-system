@@ -1,6 +1,7 @@
 import {
   Archive,
   CalendarClock,
+  ClipboardCheck,
   Cog,
   Copy,
   ExternalLink,
@@ -19,6 +20,7 @@ export const EventIcons = {
   categories: Tags,
   submissionTypes: FileText,
   submissions: Inbox,
+  reviews: ClipboardCheck,
   eligibility: ShieldCheck,
   members: Users,
   settings: Cog,

@@ -250,6 +250,87 @@ export const formFieldOpenApiSchema = z
   })
   .openapi("FormField");
 
+// ─── Module 3 Review Schemas ──────────────────────────────────────────────────
+
+export const orgEventReviewerParams = orgEventParams.extend({
+  reviewerId: z.string().min(1),
+});
+
+export const orgEventRubricCriterionParams = orgEventParams.extend({
+  criterionId: z.string().min(1),
+});
+
+export const orgEventReviewAssignmentParams = orgEventParams.extend({
+  assignmentId: z.string().min(1),
+});
+
+export const rubricCriterionOpenApiSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    eventId: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    scaleMin: z.number().int(),
+    scaleMax: z.number().int(),
+    weight: z.number(),
+    sortOrder: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("RubricCriterion");
+
+export const reviewScoreOpenApiSchema = z
+  .object({
+    id: z.string(),
+    reviewId: z.string(),
+    criterionId: z.string(),
+    score: z.number(),
+    criterion: rubricCriterionOpenApiSchema.optional(),
+  })
+  .openapi("ReviewScore");
+
+export const reviewOpenApiSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    eventId: z.string(),
+    assignmentId: z.string(),
+    recommendation: z.enum(["ACCEPT_ORAL", "ACCEPT_POSTER", "REJECT", "REVISE"]).nullable(),
+    commentAuthor: z.string().nullable().optional(),
+    commentCommittee: z.string().nullable().optional(),
+    isDraft: z.boolean(),
+    submittedAt: z.string().datetime().nullable(),
+    scores: z.array(reviewScoreOpenApiSchema).optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("Review");
+
+export const reviewAssignmentOpenApiSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    eventId: z.string(),
+    submissionId: z.string(),
+    reviewerId: z.string(),
+    status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CONFLICT"]),
+    dueAt: z.string().datetime().nullable(),
+    coiReason: z.string().nullable().optional(),
+    reviewer: z
+      .object({
+        id: z.string(),
+        email: z.string().email(),
+        fullName: z.string().nullable(),
+        institution: z.string().nullable().optional(),
+      })
+      .optional(),
+    review: reviewOpenApiSchema.nullable().optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi("ReviewAssignment");
+
 export const submissionOpenApiSchema = z
   .object({
     id: z.string(),

@@ -38,6 +38,26 @@ enum PresentationTypeCode {
   ORAL_OR_POSTER
 }
 
+enum ReviewerInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum ReviewAssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CONFLICT
+}
+
+enum ReviewRecommendation {
+  ACCEPT_ORAL
+  ACCEPT_POSTER
+  REJECT
+  REVISE
+}
+
 // ─── Prerequisites (no Module 1 CRUD APIs) ───────────────────────────────────
 
 model Organisation {
@@ -60,6 +80,9 @@ model Organisation {
   deadlineExtensions DeadlineExtension[]
   formFields         FormField[]
   submissions        Submission[]
+  rubricCriteria     RubricCriterion[]
+  reviewAssignments  ReviewAssignment[]
+  reviews            Review[]
 
   @@map("organisations")
 }
@@ -69,9 +92,10 @@ model User {
   email     String   @unique
   fullName  String?
   phone     String?
-  slmcNo    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  slmcNo      String?
+  institution String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   memberships        OrgMembership[]
   eventRoles         EventRole[]
@@ -81,6 +105,7 @@ model User {
   auditLogs          AuditLog[]
   submissions        Submission[]        @relation("SubmissionSubmitter")
   submissionVersions SubmissionVersion[] @relation("VersionCreator")
+  reviewAssignments  ReviewAssignment[]  @relation("ReviewerAssignments")
 
   @@map("users")
 }
@@ -102,13 +127,16 @@ model OrgMembership {
 }
 
 model EventRole {
-  id          String        @id @default(cuid())
-  eventId     String
-  userId      String
-  role        EventRoleType
-  categoryIds String[]      @default([])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                      String                @id @default(cuid())
+  eventId                 String
+  userId                  String
+  role                    EventRoleType
+  categoryIds             String[]              @default([])
+  maxLoad                 Int?                  @default(20)
+  invitationStatus        ReviewerInviteStatus? @default(PENDING)
+  confidentialityAgreedAt DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -163,6 +191,9 @@ model Event {
   auditLogs          AuditLog[]
   submissions        Submission[]
   formFields         FormField[]
+  rubricCriteria     RubricCriterion[]
+  reviewAssignments  ReviewAssignment[]
+  reviews            Review[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -399,9 +430,10 @@ model Submission {
   submitter      User                    @relation("SubmissionSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
   submissionType SubmissionType          @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
   category       Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  authors        SubmissionAuthor[]
-  affiliations   SubmissionAffiliation[]
-  versions       SubmissionVersion[]
+  authors           SubmissionAuthor[]
+  affiliations      SubmissionAffiliation[]
+  versions          SubmissionVersion[]
+  reviewAssignments ReviewAssignment[]
 
   @@unique([eventId, refNo])
   @@index([eventId])
@@ -462,4 +494,95 @@ model SubmissionVersion {
   @@unique([submissionId, version])
   @@index([submissionId])
   @@map("submission_versions")
+}
+
+// ─── Module 3 — Review Portal ────────────────────────────────────────────────
+
+model RubricCriterion {
+  id          String   @id @default(cuid())
+  orgId       String
+  eventId     String
+  name        String
+  description String?
+  scaleMin    Int      @default(1)
+  scaleMax    Int      @default(5)
+  weight      Float    @default(1.0)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organisation Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  scores       ReviewScore[]
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("rubric_criteria")
+}
+
+model ReviewAssignment {
+  id           String                 @id @default(cuid())
+  orgId        String
+  eventId      String
+  submissionId String
+  reviewerId   String
+  status       ReviewAssignmentStatus @default(PENDING)
+  dueAt        DateTime?
+  coiReason    String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submission   Submission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer     User         @relation("ReviewerAssignments", fields: [reviewerId], references: [id], onDelete: Cascade)
+  review       Review?
+
+  @@unique([submissionId, reviewerId])
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submissionId])
+  @@index([reviewerId])
+  @@index([status])
+  @@map("review_assignments")
+}
+
+model Review {
+  id               String                @id @default(cuid())
+  orgId            String
+  eventId          String
+  assignmentId     String                @unique
+  recommendation   ReviewRecommendation?
+  commentAuthor    String?
+  commentCommittee String?
+  isDraft          Boolean               @default(true)
+  submittedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  organisation Organisation     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignment   ReviewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  scores       ReviewScore[]
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("reviews")
+}
+
+model ReviewScore {
+  id          String   @id @default(cuid())
+  reviewId    String
+  criterionId String
+  score       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  review    Review          @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  criterion RubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, criterionId])
+  @@index([reviewId])
+  @@index([criterionId])
+  @@map("review_scores")
 }
