@@ -29,6 +29,7 @@ export default async function ReviewScreenRoute({
 
   return (
     <ReviewScreen
+      key={assignmentId}
       orgId={orgId}
       eventId={eventId}
       orgSlug={orgSlug}

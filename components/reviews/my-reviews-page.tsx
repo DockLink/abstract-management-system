@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -17,11 +16,7 @@ import { apiFetch } from "@/lib/api/client";
 import {
   ClipboardCheck,
   Clock,
-  CheckCircle2,
-  AlertCircle,
-  Calendar,
   ChevronRight,
-  ShieldCheck,
   Loader2,
 } from "lucide-react";
 
@@ -86,11 +81,11 @@ export function MyReviewsPage() {
     <div className="max-w-5xl mx-auto py-10 px-4 space-y-8">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+          <Badge variant="outline" className="text-xs bg-info-tint text-info-foreground  ">
             Peer Reviewer
           </Badge>
         </div>
-        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+        <h1 className="text-3xl font-semibold text-foreground  tracking-tight">
           My Review Portals
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -101,7 +96,7 @@ export function MyReviewsPage() {
       {events.length === 0 ? (
         <Card className="border-dashed p-12 text-center text-muted-foreground">
           <ClipboardCheck className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <h3 className="font-bold text-base text-slate-800 dark:text-slate-200">
+          <h3 className="font-bold text-base text-foreground ">
             No Reviewer Assignments
           </h3>
           <p className="text-xs mt-1 max-w-sm mx-auto">
@@ -119,24 +114,24 @@ export function MyReviewsPage() {
             return (
               <Card
                 key={evt.roleId}
-                className="border shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all bg-white dark:bg-slate-900 flex flex-col justify-between"
+                className="border shadow-xs hover:border-border  transition-all bg-card  flex flex-col justify-between"
               >
                 <CardHeader className="p-5 pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                      <span className="text-xs font-semibold  text-muted-foreground block">
                         {evt.organisation.name}
                       </span>
-                      <CardTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                      <CardTitle className="text-lg font-bold text-foreground  mt-0.5">
                         {evt.eventName}
                       </CardTitle>
                     </div>
                     {evt.hasAgreedToConfidentiality ? (
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
+                      <Badge className="bg-success hover:bg-success text-xs">
                         Active Reviewer
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                      <Badge variant="outline" className="text-xs text-warning-foreground border-warning/30">
                         Pending Sign-off
                       </Badge>
                     )}
@@ -146,11 +141,11 @@ export function MyReviewsPage() {
                 <CardContent className="p-5 pt-0 space-y-3">
                   {/* Deadline */}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                    <Clock className="h-3.5 w-3.5 text-amber-500" />
+                    <Clock className="h-3.5 w-3.5 text-warning-foreground" />
                     <span>
                       {evt.daysRemaining !== null ? (
                         evt.isExpired ? (
-                          <strong className="text-rose-600">Deadline Expired</strong>
+                          <strong className="text-danger-foreground">Deadline Expired</strong>
                         ) : (
                           <>
                             <strong>{evt.daysRemaining} days left</strong> until review deadline
@@ -164,29 +159,29 @@ export function MyReviewsPage() {
 
                   {/* Counts pill row */}
                   <div className="grid grid-cols-4 gap-2 pt-2 border-t text-center text-xs">
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800">
-                      <div className="font-bold text-slate-900 dark:text-slate-100">
+                    <div className="p-2 rounded-lg bg-muted ">
+                      <div className="font-bold text-foreground ">
                         {evt.counts.total}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">Assigned</div>
+                      <div className="text-xs text-muted-foreground">Assigned</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30">
-                      <div className="font-bold text-amber-600 dark:text-amber-400">
+                    <div className="p-2 rounded-lg bg-warning-tint ">
+                      <div className="font-bold text-warning-foreground ">
                         {evt.counts.inProgress}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">Draft</div>
+                      <div className="text-xs text-muted-foreground">Draft</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
-                      <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2 rounded-lg bg-success-tint ">
+                      <div className="font-bold text-success-foreground ">
                         {evt.counts.completed}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">Done</div>
+                      <div className="text-xs text-muted-foreground">Done</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800">
-                      <div className="font-bold text-slate-700 dark:text-slate-300">
+                    <div className="p-2 rounded-lg bg-muted ">
+                      <div className="font-bold text-foreground ">
                         {evt.counts.pending}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">Pending</div>
+                      <div className="text-xs text-muted-foreground">Pending</div>
                     </div>
                   </div>
                 </CardContent>

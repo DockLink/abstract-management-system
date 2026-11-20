@@ -117,7 +117,7 @@ export function ReviewerCertificateModal({
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-            <Award className="h-6 w-6 text-amber-500" />
+            <Award className="h-6 w-6 text-warning-foreground" />
             Certificate of Appreciation
           </DialogTitle>
           <DialogDescription>
@@ -132,30 +132,30 @@ export function ReviewerCertificateModal({
             <p className="text-sm text-muted-foreground">Generating certificate...</p>
           </div>
         ) : data ? (
-          <div className="flex-1 overflow-auto border rounded-xl bg-slate-50 dark:bg-slate-900/40 p-4 my-2">
+          <div className="flex-1 overflow-auto border rounded-xl bg-muted  p-4 my-2">
             <div
-              className="bg-white text-slate-900 border-4 border-double border-indigo-900 p-8 shadow-sm rounded-lg max-w-2xl mx-auto text-center"
+              className="bg-card text-foreground border-4 border-double border-indigo-900 p-8 shadow-sm rounded-lg max-w-2xl mx-auto text-center"
               style={{ fontFamily: "Georgia, serif" }}
             >
-              <div className="text-xs tracking-widest text-slate-500 uppercase font-sans font-semibold mb-2">
+              <div className="text-xs tracking-widest text-muted-foreground uppercase font-sans font-semibold mb-2">
                 {data.organisation.name}
               </div>
               <h2 className="text-2xl font-bold text-indigo-950 uppercase tracking-wide mb-3">
                 Certificate of Appreciation
               </h2>
-              <p className="text-sm italic text-slate-600 mb-4">
+              <p className="text-sm italic text-muted-foreground mb-4">
                 This certificate is proudly presented to
               </p>
-              <div className="text-2xl font-bold text-slate-900 border-b pb-2 mb-4 inline-block px-8">
+              <div className="text-2xl font-bold text-foreground border-b pb-2 mb-4 inline-block px-8">
                 {data.reviewer.fullName}
               </div>
-              <p className="text-sm leading-relaxed text-slate-700 max-w-xl mx-auto mb-6">
+              <p className="text-sm leading-relaxed text-foreground max-w-xl mx-auto mb-6">
                 In sincere appreciation for your valuable contribution, dedication, and expert service
                 as a peer reviewer for <strong>{data.event.name}</strong>. Your rigorous evaluation of{" "}
                 <strong>{data.stats.completedReviewsCount} abstract(s)</strong> has helped uphold the
                 highest academic standards of the conference.
               </p>
-              <div className="flex justify-between items-center text-xs text-slate-500 border-t pt-4 mt-6">
+              <div className="flex justify-between items-center text-xs text-muted-foreground border-t pt-4 mt-6">
                 <div>
                   <div className="w-24 border-b border-slate-400 mb-1 mx-auto" />
                   Academic Chair
@@ -166,7 +166,7 @@ export function ReviewerCertificateModal({
                   Organising Committee
                 </div>
               </div>
-              <div className="text-[10px] font-mono text-slate-400 text-right mt-4">
+              <div className="text-xs font-mono text-muted-foreground text-right mt-4">
                 ID: {data.certificateId}
               </div>
             </div>

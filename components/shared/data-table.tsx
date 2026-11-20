@@ -32,6 +32,7 @@ export function DataTable<T>({
   getRowId,
   rowActions,
   onRowClick,
+  rowClassName,
   loading = false,
   error,
   onRetry,
@@ -45,6 +46,8 @@ export function DataTable<T>({
   /** Buttons/menus for a row. Rendered in the last column / card footer. */
   rowActions?: (row: T) => ReactNode;
   onRowClick?: (row: T) => void;
+  /** Extra classes per row/card, e.g. to highlight flagged rows. */
+  rowClassName?: (row: T) => string | undefined;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -119,6 +122,7 @@ export function DataTable<T>({
                 className={cn(
                   "border-b border-border last:border-0",
                   onRowClick && "cursor-pointer hover:bg-muted/40",
+                  rowClassName?.(row),
                 )}
               >
                 {columns.map((c) => (
@@ -147,7 +151,7 @@ export function DataTable<T>({
         {rows.map((row) => (
           <li
             key={getRowId(row)}
-            className="rounded-lg border border-border bg-background"
+            className={cn("rounded-lg border border-border bg-background", rowClassName?.(row))}
           >
             <div
               className={cn("p-4", onRowClick && "cursor-pointer")}

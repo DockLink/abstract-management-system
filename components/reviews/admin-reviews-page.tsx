@@ -1,7 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/shared/toast";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import { EmptyState } from "@/components/shared/empty-state";
+import { FilterBar } from "@/components/shared/filter-bar";
+import { PageHeader } from "@/components/shared/page-header";
+import { SidePanel } from "@/components/shared/side-panel";
+import { PageSkeleton } from "@/components/shared/skeletons";
+import { StatCard } from "@/components/shared/stat-card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -24,28 +40,17 @@ import {
 } from "@/components/ui/dialog";
 import { apiFetch } from "@/lib/api/client";
 import {
-  ClipboardCheck,
   Users,
   Scale,
-  Send,
   AlertTriangle,
   Award,
   Plus,
   Trash2,
   Edit,
   Shuffle,
-  Clock,
-  CheckCircle2,
-  Search,
-  Filter,
   Loader2,
   Bell,
-  ChevronDown,
-  ChevronUp,
-  UserCheck,
   ShieldCheck,
-  ShieldAlert,
-  ArrowUpDown,
 } from "lucide-react";
 import type {
   ReviewerItem,
@@ -146,7 +151,10 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
   const [scoreCategoryFilter, setScoreCategoryFilter] = useState("");
   const [scoreDisagreementThreshold, setScoreDisagreementThreshold] = useState("2.0");
   const [scoreSearch, setScoreSearch] = useState("");
-  const [expandedSubmissions, setExpandedSubmissions] = useState<Record<string, boolean>>({});
+  const [pendingDelete, setPendingDelete] = useState<{ kind: "reviewer" | "criterion" | "assignment"; id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [scoreDetail, setScoreDetail] = useState<SubmissionScoreRowDto | null>(null);
 
   // ─── Data Loading ───
   const loadCategories = useCallback(async () => {
@@ -273,8 +281,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
   };
 
   // Remove reviewer
-  const handleRemoveReviewer = async (reviewerId: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove reviewer ${name} from this event?`)) {
+  const handleRemoveReviewer = async (reviewerId: string, name: string, confirmed = false) => {
+    if (!confirmed) {
+      setPendingDelete({ kind: "reviewer", id: reviewerId, name });
       return;
     }
 
@@ -357,8 +366,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
   };
 
   // Delete Rubric Criterion
-  const handleDeleteCriterion = async (criterionId: string) => {
-    if (!confirm("Delete this scoring rubric criterion? Existing scores for this criterion will be removed.")) {
+  const handleDeleteCriterion = async (criterionId: string, confirmed = false) => {
+    if (!confirmed) {
+      setPendingDelete({ kind: "criterion", id: criterionId, name: rubricCriteria.find((c) => c.id === criterionId)?.name ?? "this criterion" });
       return;
     }
 
@@ -508,8 +518,11 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
   };
 
   // Delete Assignment
-  const handleDeleteAssignment = async (assignmentId: string) => {
-    if (!confirm("Are you sure you want to unassign this reviewer?")) return;
+  const handleDeleteAssignment = async (assignmentId: string, confirmed = false) => {
+    if (!confirmed) {
+      setPendingDelete({ kind: "assignment", id: assignmentId, name: "" });
+      return;
+    }
 
     const res = await apiFetch(
       `/api/v1/orgs/${orgId}/events/${eventId}/reviews/assignments/${assignmentId}`,
@@ -542,343 +555,254 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
     setSendingReminder(false);
 
     if (res.ok) {
-      toast.success(`Reminder sent to ${res.data.remindedCount} reviewer(s)!`);
+      toast.success(`Reminder recorded for ${res.data.remindedCount} reviewer${res.data.remindedCount === 1 ? "" : "s"}`, "It's in the audit log. Email delivery isn't connected yet.");
       setRemindModalOpen(false);
       setRemindReviewerId(null);
       setRemindMessage("");
     } else {
-      toast.error(res.error.message || "Failed to send reminders");
+      toast.error("Couldn't record the reminders", { description: res.error.message });
     }
   };
 
+  // One-click reminder for one reviewer (REV-10) — same endpoint as the dialog, no custom message.
+  const handleQuickRemind = async (reviewerId: string, name: string) => {
+    setRemindingId(reviewerId);
+    const res = await apiFetch<{ remindedCount: number }>(`/api/v1/orgs/${orgId}/events/${eventId}/reviews/remind`, {
+      method: "POST",
+      body: { reviewerId, allPending: false },
+    });
+    setRemindingId(null);
+    if (res.ok) {
+      toast.success(
+        res.data.remindedCount ? `Reminder recorded for ${name}` : `${name} has nothing outstanding`,
+        res.data.remindedCount ? "It's in the audit log. Email delivery isn't connected yet." : undefined,
+      );
+    } else {
+      toast.error("Couldn't send the reminder", { description: res.error.message });
+    }
+  };
+
+  const runPendingDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      if (pendingDelete.kind === "reviewer") await handleRemoveReviewer(pendingDelete.id, pendingDelete.name, true);
+      if (pendingDelete.kind === "criterion") await handleDeleteCriterion(pendingDelete.id, true);
+      if (pendingDelete.kind === "assignment") await handleDeleteAssignment(pendingDelete.id, true);
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
+  };
+
+  if (loading && !progress) {
+    return <PageSkeleton variant="dashboard" />;
+  }
+
+  const TABS: Array<{ key: typeof activeTab; label: string; count?: number }> = [
+    { key: "progress", label: "Progress" },
+    { key: "scores", label: "Scores" },
+    { key: "assignments", label: "Assignments", count: assignments.length },
+    { key: "reviewers", label: "Reviewers", count: reviewers.length },
+    { key: "rubric", label: "Rubric", count: rubricCriteria.length },
+  ];
+
+  const scoreColumns: DataTableColumn<SubmissionScoreRowDto>[] = [
+    {
+      id: "rank",
+      header: "#",
+      mobile: "meta",
+      className: "w-10 tabular-nums text-muted-foreground",
+      cell: (r) => <span className="text-sm text-muted-foreground tabular-nums">#{scoresTable.indexOf(r) + 1}</span>,
+    },
+    {
+      id: "title",
+      header: "Abstract",
+      mobile: "title",
+      cell: (r) => (
+        <span className="block">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm text-muted-foreground">{r.refNo ?? "—"}</span>
+            {r.isDisputed ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-danger-tint px-1.5 text-sm font-medium text-danger-foreground" title={r.disputeReason ?? undefined}>
+                <AlertTriangle className="size-3.5" aria-hidden />
+                Reviewers disagree
+              </span>
+            ) : null}
+          </span>
+          <span className="line-clamp-2 font-medium">{r.title}</span>
+        </span>
+      ),
+    },
+    { id: "track", header: "Track", className: "max-w-40", cell: (r) => r.categoryName ?? "—" },
+    { id: "reviews", header: "Reviews", className: "whitespace-nowrap tabular-nums", cell: (r) => `${r.completedReviewCount} of ${r.assignedReviewCount}` },
+    {
+      id: "score",
+      header: "Weighted avg",
+      className: "tabular-nums",
+      cell: (r) => (r.completedReviewCount ? <span className="text-base font-semibold">{r.weightedAverageScore.toFixed(2)}</span> : <span className="text-muted-foreground">—</span>),
+    },
+    {
+      id: "spread",
+      header: "Spread",
+      className: "whitespace-nowrap tabular-nums",
+      cell: (r) =>
+        r.completedReviewCount > 1 ? (
+          <span className={cn(r.isDisputed && "font-semibold text-danger-foreground")}>
+            gap {r.scoreGap.toFixed(1)} · SD {r.standardDeviation.toFixed(2)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* ─── Top Page Header ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2.5">
-            <ClipboardCheck className="h-7 w-7 text-primary" />
-            Review Portal Management
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Configure reviewer pools, scoring rubrics, automated assignments, and monitor peer review progress.
-          </p>
-        </div>
+      <PageHeader
+        title="Reviews"
+        description="Reviewer progress, scores and assignments for this event."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRemindReviewerId(null);
+                setRemindModalOpen(true);
+              }}
+            >
+              <Bell data-icon="inline-start" />
+              Remind everyone…
+            </Button>
+            <Button onClick={() => setAutoAssignModalOpen(true)}>
+              <Shuffle data-icon="inline-start" />
+              Auto-assign…
+            </Button>
+          </>
+        }
+      />
 
-        {/* Global Quick Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setRemindReviewerId(null);
-              setRemindModalOpen(true);
-            }}
-            className="gap-1.5"
+      <div role="tablist" aria-label="Review sections" className="-mx-gutter flex gap-1 overflow-x-auto border-b border-border px-gutter md:mx-0 md:px-0">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            type="button"
+            aria-selected={activeTab === t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={cn(
+              "relative min-h-control shrink-0 px-4 text-base font-medium whitespace-nowrap",
+              activeTab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
           >
-            <Bell className="h-4 w-4 text-amber-500" />
-            Send Reminders
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setAutoAssignModalOpen(true)}
-            className="gap-1.5 bg-primary text-primary-foreground font-semibold"
-          >
-            <Shuffle className="h-4 w-4" />
-            Auto-Assign Reviewers
-          </Button>
-        </div>
+            {t.label}
+            {t.count !== undefined ? <span className="ml-1.5 text-sm text-muted-foreground tabular-nums">{t.count}</span> : null}
+            {activeTab === t.key ? <span aria-hidden className="absolute inset-x-2 bottom-0 h-[3px] rounded-t-full bg-primary" /> : null}
+          </button>
+        ))}
       </div>
 
-      {/* ─── Navigation Tabs ─── */}
-      <div className="border-b flex items-center gap-2 overflow-x-auto text-sm font-medium">
-        <button
-          type="button"
-          onClick={() => setActiveTab("progress")}
-          className={`py-3 px-4 border-b-2 font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === "progress"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Clock className="h-4 w-4" />
-          Progress & Reminders
-        </button>
+      {/* ─── Progress (REV-10) ─── */}
+      {activeTab === "progress" && progress ? (
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <StatCard label="Abstracts" value={progress.overview.totalSubmissions} hint={`${progress.overview.underReviewSubmissions} under review`} />
+            <StatCard label="Reviews assigned" value={progress.overview.totalAssignments} />
+            <StatCard label="In progress" value={progress.overview.inProgressAssignments} hint={`${progress.overview.pendingAssignments} not started`} />
+            <StatCard label="Done" value={`${progress.overview.percentComplete}%`} hint={`${progress.overview.completedAssignments} reviews`} progress={progress.overview.percentComplete} />
+            <StatCard
+              label="Conflicts"
+              value={progress.overview.conflictAssignments}
+              hint="Need reassigning"
+              tone={progress.overview.conflictAssignments ? "warning" : "default"}
+              className="col-span-2 lg:col-span-1"
+            />
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("reviewers")}
-          className={`py-3 px-4 border-b-2 font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === "reviewers"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          Reviewer Pool ({reviewers.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("rubric")}
-          className={`py-3 px-4 border-b-2 font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === "rubric"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Scale className="h-4 w-4" />
-          Scoring Rubric ({rubricCriteria.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("assignments")}
-          className={`py-3 px-4 border-b-2 font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === "assignments"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ClipboardCheck className="h-4 w-4" />
-          Assignments ({assignments.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("scores")}
-          className={`py-3 px-4 border-b-2 font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === "scores"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ArrowUpDown className="h-4 w-4" />
-          Scores & Disagreements
-        </button>
-      </div>
-
-      {/* ─── TAB 1: Progress & Reminders (REV-10) ─── */}
-      {activeTab === "progress" && (
-        <div className="space-y-6">
-          {/* Summary Metric Cards */}
-          {progress && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <Card className="border shadow-xs">
-                <CardContent className="p-4">
-                  <div className="text-xs uppercase font-semibold text-muted-foreground">
-                    Submissions
-                  </div>
-                  <div className="text-2xl font-black mt-1">
-                    {progress.overview.totalSubmissions}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    {progress.overview.underReviewSubmissions} under review
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border shadow-xs">
-                <CardContent className="p-4">
-                  <div className="text-xs uppercase font-semibold text-muted-foreground">
-                    Assignments
-                  </div>
-                  <div className="text-2xl font-black mt-1">
-                    {progress.overview.totalAssignments}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    {progress.overview.pendingAssignments} pending start
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border shadow-xs">
-                <CardContent className="p-4">
-                  <div className="text-xs uppercase font-semibold text-muted-foreground">
-                    In Progress
-                  </div>
-                  <div className="text-2xl font-black mt-1 text-amber-600">
-                    {progress.overview.inProgressAssignments}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">Draft saved</div>
-                </CardContent>
-              </Card>
-
-              <Card className="border shadow-xs">
-                <CardContent className="p-4">
-                  <div className="text-xs uppercase font-semibold text-muted-foreground">
-                    Completed
-                  </div>
-                  <div className="text-2xl font-black mt-1 text-emerald-600">
-                    {progress.overview.completedAssignments}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    {progress.overview.percentComplete}% overall
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border shadow-xs col-span-2 md:col-span-1">
-                <CardContent className="p-4">
-                  <div className="text-xs uppercase font-semibold text-muted-foreground">
-                    Conflicts
-                  </div>
-                  <div className="text-2xl font-black mt-1 text-rose-600">
-                    {progress.overview.conflictAssignments}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">Returned to chair</div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Reviewer Progress Table */}
-          <Card className="border shadow-xs">
-            <CardHeader className="p-5 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold">Reviewer Workload & Progress</CardTitle>
-                <CardDescription className="text-xs">
-                  Reviewer completion rates, capacity load, and reminder actions.
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b bg-slate-50/70 dark:bg-slate-900/40 text-muted-foreground font-semibold">
-                    <th className="p-3 pl-5">Reviewer</th>
-                    <th className="p-3">Assigned / Max</th>
-                    <th className="p-3">Completed</th>
-                    <th className="p-3">Pending / Draft</th>
-                    <th className="p-3">Progress</th>
-                    <th className="p-3">Last Active</th>
-                    <th className="p-3 pr-5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {progress?.reviewers.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                        No reviewers registered yet. Invite reviewers from the Reviewer Pool tab.
-                      </td>
-                    </tr>
-                  ) : (
-                    progress?.reviewers.map((r) => (
-                      <tr key={r.userId} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
-                        <td className="p-3 pl-5">
-                          <div className="font-semibold text-slate-900 dark:text-slate-100">
-                            {r.fullName || "—"}
+          <section aria-labelledby="per-reviewer">
+            <h2 id="per-reviewer" className="font-heading text-2xl font-semibold">Reviewers</h2>
+            <p className="mt-1 text-base text-muted-foreground">Sorted by least done first. “Remind” records a reminder for that reviewer.</p>
+            {progress.reviewers.length === 0 ? (
+              <EmptyState
+                compact
+                icon={Users}
+                title="No reviewers yet"
+                description="Invite reviewers from the Reviewers tab, then assign abstracts."
+                action={<Button variant="outline" onClick={() => setActiveTab("reviewers")}>Go to Reviewers</Button>}
+              />
+            ) : (
+              <ul className="mt-4 grid gap-3 md:grid-cols-2">
+                {[...progress.reviewers]
+                  .sort((x, y) => x.percentComplete - y.percentComplete)
+                  .map((r) => {
+                    const name = r.fullName || r.email;
+                    const outstanding = r.pendingCount + r.inProgressCount;
+                    return (
+                      <li key={r.userId} className="rounded-lg border border-border bg-card p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-semibold">{name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {r.completedCount} of {r.assignedCount} done
+                              {r.inProgressCount ? ` · ${r.inProgressCount} in progress` : ""}
+                              {r.conflictCount ? ` · ${r.conflictCount} conflict` : ""}
+                            </p>
                           </div>
-                          <div className="text-muted-foreground text-[11px]">{r.email}</div>
-                          {r.institution && (
-                            <div className="text-[10px] text-slate-500 italic mt-0.5">
-                              {r.institution}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <span className="font-semibold">{r.assignedCount}</span>{" "}
-                          <span className="text-muted-foreground">/ {r.maxLoad}</span>
-                        </td>
-                        <td className="p-3">
-                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                            {r.completedCount}
+                          <span className={cn("text-xl font-semibold tabular-nums", r.percentComplete === 100 ? "text-success-foreground" : r.percentComplete < 50 ? "text-warning-foreground" : "")}>
+                            {r.percentComplete}%
                           </span>
-                        </td>
-                        <td className="p-3 text-muted-foreground">
-                          {r.pendingCount} pending, {r.inProgressCount} draft
-                        </td>
-                        <td className="p-3 min-w-[140px]">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                              <div
-                                className="h-full bg-emerald-500 transition-all"
-                                style={{ width: `${r.percentComplete}%` }}
-                              />
-                            </div>
-                            <span className="font-mono text-[11px] w-9 text-right font-semibold">
-                              {r.percentComplete}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="p-3 text-muted-foreground text-[11px]">
-                          {r.lastReviewAt ? new Date(r.lastReviewAt).toLocaleDateString() : "Never"}
-                        </td>
-                        <td className="p-3 pr-5 text-right">
-                          {r.pendingCount > 0 || r.inProgressCount > 0 ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setRemindReviewerId(r.userId);
-                                setRemindModalOpen(true);
-                              }}
-                              className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                            >
-                              <Bell className="h-3.5 w-3.5 mr-1" />
-                              Remind
-                            </Button>
-                          ) : (
-                            <span className="text-[11px] text-emerald-600 font-medium">Done</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${r.percentComplete}%` }} />
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!outstanding || remindingId === r.userId}
+                            onClick={() => void handleQuickRemind(r.userId, name)}
+                          >
+                            {remindingId === r.userId ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Bell data-icon="inline-start" />}
+                            {outstanding ? "Remind" : "All done"}
+                            <span className="sr-only"> {name}</span>
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </section>
 
-          {/* Category Progress Table */}
-          {progress && progress.categories.length > 0 && (
-            <Card className="border shadow-xs">
-              <CardHeader className="p-5 pb-3">
-                <CardTitle className="text-base font-bold">Category & Track Completion</CardTitle>
-                <CardDescription className="text-xs">
-                  Review velocity by academic track.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b bg-slate-50/70 dark:bg-slate-900/40 text-muted-foreground font-semibold">
-                      <th className="p-3 pl-5">Category / Track</th>
-                      <th className="p-3">Submissions</th>
-                      <th className="p-3">Assignments</th>
-                      <th className="p-3">Completed</th>
-                      <th className="p-3 pr-5">Completion %</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {progress.categories.map((c) => (
-                      <tr key={c.categoryId} className="hover:bg-slate-50/50">
-                        <td className="p-3 pl-5 font-semibold">{c.categoryName}</td>
-                        <td className="p-3">{c.submissionCount}</td>
-                        <td className="p-3">{c.assignedCount}</td>
-                        <td className="p-3 text-emerald-600 font-medium">{c.completedCount}</td>
-                        <td className="p-3 pr-5 min-w-[140px]">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                              <div
-                                className="h-full bg-blue-500 transition-all"
-                                style={{ width: `${c.percentComplete}%` }}
-                              />
-                            </div>
-                            <span className="font-mono text-[11px] w-9 text-right font-semibold">
-                              {c.percentComplete}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
+          <section aria-labelledby="per-track">
+            <h2 id="per-track" className="font-heading text-2xl font-semibold">Tracks</h2>
+            {progress.categories.length === 0 ? (
+              <p className="mt-2 text-base text-muted-foreground">No tracks yet.</p>
+            ) : (
+              <ul className="mt-4 space-y-4 rounded-lg border border-border bg-card p-4 md:p-5">
+                {progress.categories.map((c) => (
+                  <li key={c.categoryId}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                      <span className="text-base font-medium">{c.categoryName}</span>
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        {c.completedCount} of {c.assignedCount} reviews · {c.submissionCount} abstract{c.submissionCount === 1 ? "" : "s"} ·{" "}
+                        <strong className="text-foreground">{c.percentComplete}%</strong>
+                      </span>
+                    </div>
+                    <div
+                      className="mt-1.5 h-3 overflow-hidden rounded-full bg-muted"
+                      role="img"
+                      aria-label={`${c.categoryName}: ${c.percentComplete}% of reviews complete`}
+                    >
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${c.percentComplete}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
-      )}
+      ) : null}
 
       {/* ─── TAB 2: Reviewer Pool (REV-01, REV-02, REV-14) ─── */}
       {activeTab === "reviewers" && (
@@ -904,7 +828,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             <CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b bg-slate-50/70 dark:bg-slate-900/40 text-muted-foreground font-semibold">
+                  <tr className="border-b bg-muted  text-muted-foreground font-semibold">
                     <th className="p-3 pl-5">Reviewer</th>
                     <th className="p-3">Institution</th>
                     <th className="p-3">Expertise Categories</th>
@@ -922,25 +846,25 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                     </tr>
                   ) : (
                     reviewers.map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-50/50">
+                      <tr key={r.id} className="hover:bg-muted">
                         <td className="p-3 pl-5">
-                          <div className="font-semibold text-slate-900 dark:text-slate-100">
+                          <div className="font-semibold text-foreground ">
                             {r.fullName || "—"}
                           </div>
-                          <div className="text-muted-foreground text-[11px]">{r.email}</div>
+                          <div className="text-muted-foreground text-xs">{r.email}</div>
                         </td>
                         <td className="p-3 text-muted-foreground">{r.institution || "—"}</td>
                         <td className="p-3">
                           {r.categories && r.categories.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {r.categories.map((c) => (
-                                <Badge key={c.id} variant="secondary" className="text-[10px]">
+                                <Badge key={c.id} variant="secondary" className="text-xs">
                                   {c.name}
                                 </Badge>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-muted-foreground italic text-[11px]">
+                            <span className="text-muted-foreground italic text-xs">
                               General (all categories)
                             </span>
                           )}
@@ -949,22 +873,22 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                         <td className="p-3 space-y-1">
                           <div>
                             {r.invitationStatus === "ACCEPTED" ? (
-                              <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
+                              <Badge className="bg-success hover:bg-success text-xs">
                                 Accepted
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-[10px] text-amber-600">
+                              <Badge variant="outline" className="text-xs text-warning-foreground">
                                 Pending Invite
                               </Badge>
                             )}
                           </div>
                           {r.confidentialityAgreedAt ? (
-                            <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
+                            <span className="text-xs text-success-foreground flex items-center gap-1 font-medium">
                               <ShieldCheck className="h-3 w-3" />
                               Confidentiality Signed
                             </span>
                           ) : (
-                            <span className="text-[10px] text-slate-400 italic">
+                            <span className="text-xs text-muted-foreground italic">
                               Awaiting signature
                             </span>
                           )}
@@ -978,7 +902,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                               setSelectedReviewerName(r.fullName || r.email);
                               setCertModalOpen(true);
                             }}
-                            className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            className="h-7 text-xs text-warning-foreground hover:text-warning-foreground hover:bg-warning-tint"
                             title="View Certificate of Appreciation"
                           >
                             <Award className="h-3.5 w-3.5 mr-1" />
@@ -988,7 +912,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                             variant="ghost"
                             size="sm"
                             onClick={() => handleRemoveReviewer(r.id, r.fullName || r.email)}
-                            className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            className="h-7 text-xs text-danger-foreground hover:text-danger-foreground hover:bg-danger-tint"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -1042,7 +966,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               </div>
             ) : (
               rubricCriteria.map((c) => (
-                <Card key={c.id} className="border shadow-xs bg-white dark:bg-slate-900 flex flex-col justify-between">
+                <Card key={c.id} className="border shadow-xs bg-card  flex flex-col justify-between">
                   <CardHeader className="p-4 pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -1061,7 +985,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                   <CardContent className="p-4 pt-2">
                     {/* Scale preview */}
                     <div className="flex items-center gap-1.5 mt-2">
-                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">
+                      <span className="text-xs text-muted-foreground font-semibold ">
                         Scale:
                       </span>
                       <div className="flex gap-1">
@@ -1071,7 +995,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                         ).map((v) => (
                           <span
                             key={v}
-                            className="px-2 py-0.5 rounded-sm bg-slate-100 dark:bg-slate-800 text-[11px] font-mono font-medium"
+                            className="px-2 py-0.5 rounded-sm bg-muted  text-xs font-mono font-medium"
                           >
                             {v}
                           </span>
@@ -1101,7 +1025,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteCriterion(c.id)}
-                      className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                      className="h-7 text-xs text-danger-foreground hover:text-danger-foreground hover:bg-danger-tint"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -1157,7 +1081,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             <CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b bg-slate-50/70 dark:bg-slate-900/40 text-muted-foreground font-semibold">
+                  <tr className="border-b bg-muted  text-muted-foreground font-semibold">
                     <th className="p-3 pl-5">Abstract</th>
                     <th className="p-3">Category</th>
                     <th className="p-3">Reviewer</th>
@@ -1175,12 +1099,12 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                     </tr>
                   ) : (
                     assignments.map((a) => (
-                      <tr key={a.id} className="hover:bg-slate-50/50">
+                      <tr key={a.id} className="hover:bg-muted">
                         <td className="p-3 pl-5 max-w-[280px]">
-                          <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                          <span className="font-mono text-xs font-semibold text-foreground ">
                             {a.submission?.refNo || "—"}
                           </span>
-                          <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          <div className="font-semibold text-foreground  truncate">
                             {a.submission?.title}
                           </div>
                         </td>
@@ -1192,31 +1116,31 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                             {a.reviewer?.fullName || a.reviewer?.email}
                           </div>
                           {a.reviewer?.institution && (
-                            <div className="text-[10px] text-muted-foreground italic">
+                            <div className="text-xs text-muted-foreground italic">
                               {a.reviewer.institution}
                             </div>
                           )}
                         </td>
                         <td className="p-3">
                           {a.status === "COMPLETED" ? (
-                            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
+                            <Badge className="bg-success hover:bg-success text-xs">
                               Completed
                             </Badge>
                           ) : a.status === "IN_PROGRESS" ? (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px]">
+                            <Badge variant="secondary" className="bg-warning-tint text-warning-foreground text-xs">
                               In Progress
                             </Badge>
                           ) : a.status === "CONFLICT" ? (
-                            <Badge variant="destructive" className="text-[10px]">
+                            <Badge variant="destructive" className="text-xs">
                               Conflict
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-[10px]">
+                            <Badge variant="outline" className="text-xs">
                               Pending
                             </Badge>
                           )}
                           {a.coiReason && (
-                            <p className="text-[10px] text-rose-600 mt-1 italic">
+                            <p className="text-xs text-danger-foreground mt-1 italic">
                               Reason: {a.coiReason}
                             </p>
                           )}
@@ -1224,7 +1148,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                         <td className="p-3">
                           {a.review && !a.review.isDraft ? (
                             <div className="space-y-0.5">
-                              <Badge variant="outline" className="text-[10px]">
+                              <Badge variant="outline" className="text-xs">
                                 {a.review.recommendation?.replace(/_/g, " ")}
                               </Badge>
                             </div>
@@ -1242,7 +1166,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                               setReassignReason("");
                               setReassignModalOpen(true);
                             }}
-                            className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            className="h-7 text-xs text-info-foreground hover:text-info-foreground hover:bg-info-tint"
                             title="Reassign to another reviewer"
                           >
                             Reassign
@@ -1251,7 +1175,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteAssignment(a.id)}
-                            className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            className="h-7 text-xs text-danger-foreground hover:text-danger-foreground hover:bg-danger-tint"
                             title="Unassign"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1267,237 +1191,131 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         </div>
       )}
 
-      {/* ─── TAB 5: Score Table & Disagreement Board (REV-11, REV-12) ─── */}
-      {activeTab === "scores" && (
+      {/* ─── Scores (REV-11, REV-12) ─── */}
+      {activeTab === "scores" ? (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold">Score Table & Disagreement Board</h2>
-              <p className="text-xs text-muted-foreground">
-                Ranked abstracts by weighted average score, individual reviewer marks, standard deviation, and dispute flags.
-              </p>
-            </div>
-
-            {/* Filter controls */}
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                aria-label="Filter by Category"
-                value={scoreCategoryFilter}
-                onChange={(e) => setScoreCategoryFilter(e.target.value)}
-                className="h-8 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
-              >
-                <option value="">All Categories</option>
+          <FilterBar
+            search={scoreSearch}
+            onSearchChange={setScoreSearch}
+            searchPlaceholder="Search title or reference"
+            searchLabel="Search abstracts"
+            activeCount={scoreCategoryFilter ? 1 : 0}
+            onClear={() => {
+              setScoreSearch("");
+              setScoreCategoryFilter("");
+            }}
+            resultCount={{
+              shown: scoresTable.length,
+              noun: `abstracts · ${scoresTable.filter((r) => r.isDisputed).length} with disagreement`,
+            }}
+          >
+            <Select value={scoreCategoryFilter || "all"} onValueChange={(v) => setScoreCategoryFilter(v === "all" ? "" : v)}>
+              <SelectTrigger aria-label="Filter by track">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All tracks</SelectItem>
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
-              </select>
-
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-muted-foreground">Dispute Gap &ge;</span>
-                <input
-                  type="number"
-                  aria-label="Dispute Gap Threshold"
-                  step="0.5"
-                  min="0.5"
-                  max="10"
-                  value={scoreDisagreementThreshold}
-                  onChange={(e) => setScoreDisagreementThreshold(e.target.value)}
-                  className="w-16 h-8 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
-                />
-              </div>
-
-              <div className="relative">
-                <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search ref or title..."
-                  value={scoreSearch}
-                  onChange={(e) => setScoreSearch(e.target.value)}
-                  className="pl-8 h-8 text-xs w-44 bg-white dark:bg-slate-900"
-                />
-              </div>
-            </div>
-          </div>
-
-          <Card className="border shadow-xs">
-            <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b bg-slate-50/70 dark:bg-slate-900/40 text-muted-foreground font-semibold">
-                    <th className="p-3 pl-5 w-8">#</th>
-                    <th className="p-3">Ref & Title</th>
-                    <th className="p-3">Category</th>
-                    <th className="p-3 text-center">Reviews</th>
-                    <th className="p-3 text-center">Weighted Score</th>
-                    <th className="p-3 text-center">Score Gap</th>
-                    <th className="p-3 text-center">Std Dev</th>
-                    <th className="p-3">Dispute Flag</th>
-                    <th className="p-3 pr-5 text-right">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {scoresTable.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                        No evaluated abstracts found matching current filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    scoresTable.map((row, idx) => {
-                      const isExpanded = Boolean(expandedSubmissions[row.submissionId]);
-                      return (
-                        <tr key={row.submissionId} className="group">
-                          <td colSpan={9} className="p-0">
-                            <div
-                              onClick={() =>
-                                setExpandedSubmissions((prev) => ({
-                                  ...prev,
-                                  [row.submissionId]: !prev[row.submissionId],
-                                }))
-                              }
-                              className={`flex items-center p-3 pl-5 pr-5 cursor-pointer transition-colors ${
-                                row.isDisputed
-                                  ? "bg-rose-50/40 dark:bg-rose-950/20 hover:bg-rose-50/70"
-                                  : "hover:bg-slate-50/60"
-                              }`}
-                            >
-                              <div className="w-8 font-mono text-muted-foreground font-semibold">
-                                {idx + 1}
-                              </div>
-                              <div className="flex-1 pr-4">
-                                <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                                  {row.refNo || "—"}
-                                </span>
-                                <div className="font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">
-                                  {row.title}
-                                </div>
-                              </div>
-                              <div className="w-32 text-muted-foreground truncate">
-                                {row.categoryName || "—"}
-                              </div>
-                              <div className="w-20 text-center font-semibold">
-                                {row.completedReviewCount} / {row.assignedReviewCount}
-                              </div>
-                              <div className="w-24 text-center font-bold text-base text-slate-900 dark:text-slate-100">
-                                {row.weightedAverageScore || "—"}
-                              </div>
-                              <div className="w-20 text-center font-mono">
-                                {row.scoreGap > 0 ? row.scoreGap : "—"}
-                              </div>
-                              <div className="w-20 text-center font-mono text-muted-foreground">
-                                &plusmn;{row.standardDeviation}
-                              </div>
-                              <div className="w-36">
-                                {row.isDisputed ? (
-                                  <Badge variant="destructive" className="text-[10px] gap-1">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    Disputed Gap
-                                  </Badge>
-                                ) : (
-                                  <span className="text-[11px] text-muted-foreground">Aligned</span>
-                                )}
-                              </div>
-                              <div className="w-12 text-right">
-                                {isExpanded ? (
-                                  <ChevronUp className="h-4 w-4 ml-auto text-muted-foreground" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 ml-auto text-muted-foreground" />
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Expanded Breakdown */}
-                            {isExpanded && (
-                              <div className="p-4 bg-slate-50/80 dark:bg-slate-900/60 border-t border-b space-y-3">
-                                {row.disputeReason && (
-                                  <div className="p-2.5 rounded-lg bg-rose-100/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 text-xs flex items-center justify-between">
-                                    <span>
-                                      <strong>Dispute Flag:</strong> {row.disputeReason}
-                                    </span>
-                                    {/* Action to add third reviewer (REV-13) */}
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setManualSubmissionId(row.submissionId);
-                                        setManualReviewerId("");
-                                        setManualAssignModalOpen(true);
-                                      }}
-                                      className="h-7 text-xs font-semibold"
-                                    >
-                                      + Add 3rd Reviewer
-                                    </Button>
-                                  </div>
-                                )}
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {row.reviews.length === 0 ? (
-                                    <div className="col-span-2 text-muted-foreground text-xs italic py-2">
-                                      No completed reviews submitted yet for this abstract.
-                                    </div>
-                                  ) : (
-                                    row.reviews.map((rev, rIdx) => (
-                                      <div
-                                        key={rIdx}
-                                        className="p-3 rounded-lg border bg-white dark:bg-slate-800 text-xs space-y-2"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <span className="font-bold">
-                                            {rev.reviewerName || `Reviewer ${rIdx + 1}`}
-                                          </span>
-                                          <div className="flex items-center gap-2">
-                                            <Badge variant="outline" className="text-[10px]">
-                                              {rev.recommendation?.replace(/_/g, " ")}
-                                            </Badge>
-                                            <span className="font-bold text-sm">
-                                              Score: {rev.weightedScore}
-                                            </span>
-                                          </div>
-                                        </div>
-
-                                        {/* Criterion scores */}
-                                        <div className="grid grid-cols-2 gap-1 pt-1 border-t text-[11px]">
-                                          {rev.criterionScores.map((c) => (
-                                            <div key={c.criterionId} className="flex justify-between">
-                                              <span className="text-muted-foreground truncate">
-                                                {c.criterionName}:
-                                              </span>
-                                              <span className="font-semibold">{c.score}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-
-                                        {rev.commentAuthor && (
-                                          <div className="pt-1 text-[11px]">
-                                            <strong className="text-muted-foreground">To Author:</strong>{" "}
-                                            {rev.commentAuthor}
-                                          </div>
-                                        )}
-
-                                        {rev.commentCommittee && (
-                                          <div className="pt-1 text-[11px] text-amber-700 dark:text-amber-400">
-                                            <strong>Confidential:</strong> {rev.commentCommittee}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+              </SelectContent>
+            </Select>
+            <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+              Flag a gap of
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                min="0"
+                value={scoreDisagreementThreshold}
+                onChange={(e) => setScoreDisagreementThreshold(e.target.value)}
+                className="w-20"
+                aria-label="Disagreement threshold"
+              />
+              or more
+            </label>
+          </FilterBar>
+          <DataTable
+            caption="Scores by abstract, highest first"
+            columns={scoreColumns}
+            rows={scoresTable}
+            getRowId={(r) => r.submissionId}
+            rowClassName={(r) => (r.isDisputed ? "bg-danger-tint/40 border-danger/30" : undefined)}
+            empty={{
+              icon: Scale,
+              title: "No scores yet",
+              description: "Scores appear as reviewers submit their reviews.",
+            }}
+            rowActions={(r) => (
+              <Button size="sm" variant="outline" onClick={() => setScoreDetail(r)} disabled={!r.reviews.length}>
+                Reviews ({r.reviews.length})
+                <span className="sr-only"> for {r.refNo ?? r.title}</span>
+              </Button>
+            )}
+          />
         </div>
-      )}
+      ) : null}
+
+      <SidePanel
+        open={!!scoreDetail}
+        onOpenChange={(o) => !o && setScoreDetail(null)}
+        size="lg"
+        title={scoreDetail?.refNo ?? "Reviews"}
+        description={scoreDetail?.title}
+        footer={<Button variant="outline" onClick={() => setScoreDetail(null)}>Close</Button>}
+      >
+        {scoreDetail ? (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-3 gap-2">
+              <div className="rounded-md border border-border p-3">
+                <dt className="text-sm text-muted-foreground">Weighted avg</dt>
+                <dd className="text-xl font-semibold tabular-nums">{scoreDetail.weightedAverageScore.toFixed(2)}</dd>
+              </div>
+              <div className="rounded-md border border-border p-3">
+                <dt className="text-sm text-muted-foreground">Gap</dt>
+                <dd className={cn("text-xl font-semibold tabular-nums", scoreDetail.isDisputed && "text-danger-foreground")}>{scoreDetail.scoreGap.toFixed(1)}</dd>
+              </div>
+              <div className="rounded-md border border-border p-3">
+                <dt className="text-sm text-muted-foreground">SD</dt>
+                <dd className="text-xl font-semibold tabular-nums">{scoreDetail.standardDeviation.toFixed(2)}</dd>
+              </div>
+            </dl>
+            {scoreDetail.isDisputed && scoreDetail.disputeReason ? (
+              <p className="flex items-start gap-2 rounded-md bg-danger-tint px-3 py-2 text-base text-danger-foreground">
+                <AlertTriangle className="mt-1 size-4 shrink-0" aria-hidden />
+                {scoreDetail.disputeReason.replace(/\.?\s*$/, ".")} Consider adding a third reviewer from Assignments.
+              </p>
+            ) : null}
+            <ol className="space-y-3">
+              {scoreDetail.reviews.map((rv, i) => (
+                <li key={rv.reviewerId} className="rounded-lg border border-border p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-base font-semibold">{rv.reviewerName ?? `Reviewer ${i + 1}`}</p>
+                    <p className="text-base tabular-nums">
+                      <strong>{rv.weightedScore.toFixed(2)}</strong>
+                      {rv.recommendation ? <span className="ml-2 text-sm text-muted-foreground">{rv.recommendation.replace("_", " ").toLowerCase()}</span> : null}
+                    </p>
+                  </div>
+                  <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+                    {rv.criterionScores.map((cs) => (
+                      <li key={cs.criterionId} className="flex justify-between gap-2">
+                        <span className="truncate text-muted-foreground">{cs.criterionName}</span>
+                        <span className="font-semibold tabular-nums">{cs.score}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {rv.commentCommittee ? (
+                    <p className="mt-3 rounded-md bg-muted px-3 py-2 text-sm"><span className="font-medium">To committee:</span> {rv.commentCommittee}</p>
+                  ) : null}
+                  {rv.commentAuthor ? (
+                    <p className="mt-2 text-sm"><span className="font-medium">To authors:</span> {rv.commentAuthor}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
+      </SidePanel>
 
       {/* ─── MODAL: Invite Reviewer (REV-01) ─── */}
       <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
@@ -1542,13 +1360,13 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                           setInviteCategories(inviteCategories.filter((id) => id !== cat.id));
                         }
                       }}
-                      className="rounded border-gray-300 text-primary"
+                      className="rounded border-border text-primary"
                     />
                     <span className="truncate">{cat.name}</span>
                   </label>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Leave unchecked if reviewer can evaluate submissions in all categories.
               </p>
             </div>
@@ -1677,7 +1495,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 value={autoReviewersPerAbstract}
                 onChange={(e) => setAutoReviewersPerAbstract(e.target.value)}
               />
-              <p className="text-[11px] text-muted-foreground">Standard default is 2 reviewers per submission.</p>
+              <p className="text-xs text-muted-foreground">Standard default is 2 reviewers per submission.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1686,7 +1504,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 id="auto-cat"
                 value={autoCategory}
                 onChange={(e) => setAutoCategory(e.target.value)}
-                className="w-full h-9 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
+                className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
                 <option value="">All Categories</option>
                 {categories.map((c) => (
@@ -1703,7 +1521,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                   type="checkbox"
                   checked={autoSkipInstitution}
                   onChange={(e) => setAutoSkipInstitution(e.target.checked)}
-                  className="rounded border-gray-300 text-primary"
+                  className="rounded border-border text-primary"
                 />
                 <span className="font-medium text-xs">
                   Skip same-institution reviewers (prevent conflict of interest)
@@ -1715,7 +1533,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                   type="checkbox"
                   checked={autoBalanceLoad}
                   onChange={(e) => setAutoBalanceLoad(e.target.checked)}
-                  className="rounded border-gray-300 text-primary"
+                  className="rounded border-border text-primary"
                 />
                 <span className="font-medium text-xs">
                   Balance reviewer workloads evenly (fewest assignments first)
@@ -1754,7 +1572,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               <select
                 value={bulkCategorySelected}
                 onChange={(e) => setBulkCategorySelected(e.target.value)}
-                className="w-full h-9 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
+                className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
                 <option value="">Select Category...</option>
                 {categories.map((c) => (
@@ -1780,7 +1598,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                           setBulkReviewersSelected(bulkReviewersSelected.filter((id) => id !== r.userId));
                         }
                       }}
-                      className="rounded border-gray-300 text-primary"
+                      className="rounded border-border text-primary"
                     />
                     <span>
                       {r.fullName || r.email} ({r.assignedCount}/{r.maxLoad})
@@ -1821,7 +1639,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               <select
                 value={manualSubmissionId}
                 onChange={(e) => setManualSubmissionId(e.target.value)}
-                className="w-full h-9 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
+                className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
                 <option value="">Select Submission...</option>
                 {submissionsList.map((s) => (
@@ -1838,7 +1656,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               <select
                 value={manualReviewerId}
                 onChange={(e) => setManualReviewerId(e.target.value)}
-                className="w-full h-9 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
+                className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
                 <option value="">Select Reviewer...</option>
                 {reviewers.map((r) => (
@@ -1880,7 +1698,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               <select
                 value={reassignNewReviewerId}
                 onChange={(e) => setReassignNewReviewerId(e.target.value)}
-                className="w-full h-9 text-xs border rounded-lg px-2 bg-white dark:bg-slate-900"
+                className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
                 <option value="">Select New Reviewer...</option>
                 {reviewers.map((r) => (
@@ -1920,21 +1738,21 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-amber-500" />
-              Send Review Reminders
+              <Bell className="h-5 w-5 text-warning-foreground" />
+              Remind reviewers
             </DialogTitle>
             <DialogDescription>
               {remindReviewerId
-                ? "Send an immediate reminder notification to this reviewer regarding their pending reviews."
-                : "Send an automatic reminder to ALL reviewers who currently have pending or in-progress assignments."}
+                ? "Record a reminder for this reviewer's outstanding reviews. Email delivery isn't connected yet, so it's logged only."
+                : "Record a reminder for every reviewer with reviews not yet submitted. Email delivery isn't connected yet, so it's logged only."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="remind-msg">Custom Note (optional)</Label>
+              <Label htmlFor="remind-msg">Note (optional)</Label>
               <Textarea
                 id="remind-msg"
-                placeholder="Add an urgent note or deadline reminder from the academic committee..."
+                placeholder="e.g. Reviews close on 30 November 2026."
                 value={remindMessage}
                 onChange={(e) => setRemindMessage(e.target.value)}
                 rows={3}
@@ -1951,7 +1769,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </Button>
             <Button onClick={handleSendReminder} disabled={sendingReminder}>
               {sendingReminder && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Send Reminders
+              Record reminders
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1965,6 +1783,28 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         reviewerName={selectedReviewerName}
         open={certModalOpen}
         onOpenChange={setCertModalOpen}
+      />
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+        title={
+          pendingDelete?.kind === "reviewer"
+            ? `Remove ${pendingDelete.name} from the reviewer pool?`
+            : pendingDelete?.kind === "criterion"
+              ? `Delete “${pendingDelete.name}”?`
+              : "Unassign this reviewer?"
+        }
+        description={
+          pendingDelete?.kind === "reviewer"
+            ? "They won't be able to review for this event."
+            : pendingDelete?.kind === "criterion"
+              ? "Scores already given for this criterion are removed. Weighted totals will change."
+              : "Any review already written for this assignment is deleted too. You can't undo this."
+        }
+        confirmLabel={pendingDelete?.kind === "reviewer" ? "Remove reviewer" : pendingDelete?.kind === "criterion" ? "Delete criterion" : "Unassign"}
+        destructive
+        loading={deleting}
+        onConfirm={runPendingDelete}
       />
     </div>
   );
