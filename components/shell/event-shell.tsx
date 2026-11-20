@@ -43,7 +43,7 @@ function EventMark({ name, logoUrl, size = 40 }: { name: string; logoUrl: string
         className="relative block shrink-0 overflow-hidden rounded-md border border-border bg-white"
         style={{ width: size, height: size }}
       >
-        <Image src={logoUrl} alt="" fill sizes={`${size}px`} className="object-contain p-1" unoptimized />
+        <Image src={logoUrl} alt="" fill sizes={`${size}px`} className="object-contain p-1" />
       </span>
     );
   }

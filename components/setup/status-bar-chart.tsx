@@ -6,7 +6,15 @@ import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } 
 export default function StatusBarChart({ data }: { data: Array<{ label: string; count: number }> }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 36, bottom: 0, left: 0 }} barCategoryGap={12}>
+      {/* The figure is aria-hidden (a visually hidden table carries the data), so
+          turn off recharts' keyboard layer or it leaves a focusable hidden SVG. */}
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ top: 0, right: 36, bottom: 0, left: 0 }}
+        barCategoryGap={12}
+        accessibilityLayer={false}
+      >
         <XAxis type="number" hide allowDecimals={false} domain={[0, "dataMax"]} />
         <YAxis type="category" dataKey="label" hide />
         <Tooltip

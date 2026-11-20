@@ -58,16 +58,22 @@ export async function POST(request: Request, context: Ctx) {
         return unprocessable(`Cannot submit a submission in status: ${submission.status}`);
       }
 
-      // Non-admin: check submission window or personal extension
+      // Non-admin: check submission window, personal extension, or active revision deadline
       if (!isAdmin) {
-        const event = await prisma.event.findFirst({ where: { id: eventId, orgId, deletedAt: null } });
-        if (event) {
-          const portal = derivePortalState(event);
-          const extension = await prisma.deadlineExtension.findFirst({
-            where: { eventId, submitterUserId: auth.ctx.user.id, extendsUntil: { gt: new Date() } },
-          });
-          if (!portal.canSubmit && !extension) {
-            return unprocessable("The submission deadline has passed.");
+        const isRevision = submission.status === "REVISIONS_REQUESTED";
+        const hasValidRevisionDeadline =
+          isRevision && (!submission.revisionDueAt || new Date() <= submission.revisionDueAt);
+
+        if (!hasValidRevisionDeadline) {
+          const event = await prisma.event.findFirst({ where: { id: eventId, orgId, deletedAt: null } });
+          if (event) {
+            const portal = derivePortalState(event);
+            const extension = await prisma.deadlineExtension.findFirst({
+              where: { eventId, submitterUserId: auth.ctx.user.id, extendsUntil: { gt: new Date() } },
+            });
+            if (!portal.canSubmit && !extension) {
+              return unprocessable("The submission deadline has passed.");
+            }
           }
         }
       }
@@ -167,6 +173,8 @@ export async function POST(request: Request, context: Ctx) {
       // 10. Snapshot before status change
       await snapshotSubmission(submissionId, auth.ctx.user.id);
 
+      const isRevision = submission.status === "REVISIONS_REQUESTED";
+
       const updated = (await prisma.submission.update({
         where: { id: submissionId },
         data: {
@@ -183,6 +191,14 @@ export async function POST(request: Request, context: Ctx) {
         authors: NonNullable<Awaited<ReturnType<typeof prisma.submissionAuthor.findMany>>>;
         affiliations: NonNullable<Awaited<ReturnType<typeof prisma.submissionAffiliation.findMany>>>;
       };
+
+      // DEC-07: Resubmitted revision returns to the same reviewers
+      if (isRevision) {
+        await prisma.reviewAssignment.updateMany({
+          where: { submissionId, status: { not: "CONFLICT" } },
+          data: { status: "IN_PROGRESS" },
+        });
+      }
 
       await writeAuditLog({
         orgId,

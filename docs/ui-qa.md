@@ -58,8 +58,8 @@ yarn test:a11y         # axe + keyboard checks; reuses `yarn dev` on :3000
 ### Needs a decision or a logic change (not done in a presentation pass)
 
 1. **`yarn lint` exits 1 on 16 errors**, all `react-hooks/set-state-in-effect`. Every page loads its data with `useEffect(() => { void load() })`, and `load` sets loading state synchronously. These existed before this pass and before every commit in the UI series. The fix is a data-loading refactor: either a small `useApiQuery` hook built on `use()` with a promise cache (as the event dashboard already does), or React Query. That changes behaviour on every screen, so it needs its own task. Typecheck and build pass.
-2. **Images are `unoptimized`.** Logos and banners come from Supabase straight at full size, so a 375 px phone downloads the original banner. `remotePatterns` already allows `*.supabase.co`, so removing `unoptimized` from `event-hero.tsx` should work. No seeded event has a logo or banner, though, so this couldn't be verified here. Test it with a real banner first, because signed URLs that expire may need `minimumCacheTTL` tuning.
-3. **Event dashboard counters read 0** while the event has 5 abstracts and 3 review assignments (audit P0-5). It's an API problem, not UI.
+2. ~~Images are `unoptimized`.~~ **Fixed:** the public event page and app shell now go through the Next image optimiser. It was checked with a signed Supabase URL: a 146 KB PNG became 7 KB WebP at 384 px. Admin upload previews still skip optimisation for local `blob:` previews.
+3. ~~Event dashboard counters read 0.~~ **Fixed:** `GET /dashboard` returns real counts by status and track, plus review progress. Conflicts are left out of the review total, and registrations stay 0 until Module 5.
 4. **Reminders are logged, not emailed.** The UI says so. GEN-03 email delivery isn't built.
 
 ### Accessibility not covered by the automated checks
@@ -70,9 +70,15 @@ yarn test:a11y         # axe + keyboard checks; reuses `yarn dev` on :3000
 
 ### Older screens still on the pre-redesign layout
 
-8. **Admin submissions** (`components/setup/admin-submissions-page.tsx`): now on tokens and accessible, but still a hand-built table with a modal inspector. It should move to DataTable with cards on mobile, FilterBar and SidePanel, like the Scores tab.
+8. ~~Admin submissions on the old layout.~~ **Fixed:** it now uses DataTable (cards on mobile), FilterBar with a debounced search, a SidePanel for the abstract, readable status labels, and loading, empty and error states.
 9. **Admin reviews: Reviewers, Rubric and Assignments tabs**: tokens and copy fixed, but they still use the old dialogs and native `<select>` elements, and `sm` buttons (36 px) on desktop. They're fine for pointer input, but should share the redesigned patterns.
 10. **Reviewer certificate**: the printable HTML (`lib/services/reviews/certificate.ts`) keeps its own hex colours. It's a standalone print document, not themed UI.
+
+### Fixed after this report
+
+- Admin reviews: each tab now shows an error with "Try again" when its data fails to load, instead of an empty list.
+- Settings: a failed load of deadline extensions shows an error with "Try again" instead of "No extensions".
+- Submission wizard: signed-in authors without an organiser role can read categories, submission types and presentation types. Before, these returned 403. Admins still get the full payload; for everyone else the category `chairUserId` is blanked. Write endpoints are unchanged.
 
 ### Inline styles kept on purpose
 

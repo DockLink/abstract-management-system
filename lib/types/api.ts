@@ -308,6 +308,15 @@ export type SubmissionDto = {
   prevPublishedDetails: string | null;
   submittedAt: string | null;
   withdrawnAt: string | null;
+  decision?: string | null;
+  presentationType?: string | null;
+  decisionReleasedAt?: string | null;
+  reviewsReleased?: boolean;
+  revisionDueAt?: string | null;
+  slotResponse?: "CONFIRMED" | "DECLINED" | null;
+  slotRespondedAt?: string | null;
+  decisionNote?: string | null;
+  reviewerComments?: string[];
   createdAt: string;
   updatedAt: string;
   authors?: SubmissionAuthorDto[];

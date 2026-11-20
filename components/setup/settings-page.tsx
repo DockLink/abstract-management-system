@@ -76,6 +76,7 @@ export function SettingsPage({
   const [extensions, setExtensions] = useState<DeadlineExtensionDto[]>([]);
   const [roles, setRoles] = useState<EventRoleDto[]>([]);
   const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const [extendOpen, setExtendOpen] = useState(false);
   const [submitterUserId, setSubmitterUserId] = useState("");
@@ -113,6 +114,9 @@ export function SettingsPage({
     ]);
     if (extRes.ok) setExtensions(extRes.data);
     if (rolesRes.ok) setRoles(rolesRes.data);
+    // Roles feed the "Extend a deadline" author list, so either failure matters here.
+    const failed = !extRes.ok ? extRes : !rolesRes.ok ? rolesRes : null;
+    setSettingsError(failed && !failed.ok ? failed.error.message || "Deadline extensions couldn't be loaded." : null);
     setSettingsLoading(false);
   }, [base]);
 
@@ -294,6 +298,11 @@ export function SettingsPage({
             rows={extensions}
             getRowId={(e) => e.id}
             loading={settingsLoading}
+            error={settingsError}
+            onRetry={() => {
+              setSettingsLoading(true);
+              void loadAux();
+            }}
             empty={{ title: "No extensions", description: "Everyone has the same submission deadline." }}
           />
         </section>

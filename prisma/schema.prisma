@@ -83,6 +83,8 @@ model Organisation {
   rubricCriteria     RubricCriterion[]
   reviewAssignments  ReviewAssignment[]
   reviews            Review[]
+  emailTemplates     EmailTemplate[]
+  emailLogs          EmailLog[]
 
   @@map("organisations")
 }
@@ -106,6 +108,7 @@ model User {
   submissions        Submission[]        @relation("SubmissionSubmitter")
   submissionVersions SubmissionVersion[] @relation("VersionCreator")
   reviewAssignments  ReviewAssignment[]  @relation("ReviewerAssignments")
+  decidedSubmissions Submission[]        @relation("SubmissionDecidedBy")
 
   @@map("users")
 }
@@ -135,6 +138,8 @@ model EventRole {
   maxLoad                 Int?                  @default(20)
   invitationStatus        ReviewerInviteStatus? @default(PENDING)
   confidentialityAgreedAt DateTime?
+  /// Module 4: lets a track chair make final decisions in their categories
+  canMakeFinalDecisions   Boolean               @default(false)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
@@ -194,6 +199,8 @@ model Event {
   rubricCriteria     RubricCriterion[]
   reviewAssignments  ReviewAssignment[]
   reviews            Review[]
+  emailTemplates     EmailTemplate[]
+  emailLogs          EmailLog[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -421,6 +428,29 @@ model Submission {
   declarations              Json             @default("{}")
   submittedAt               DateTime?
   withdrawnAt               DateTime?
+
+  // ── Module 4 — Decisions ──
+  // The decision is held here and stays hidden from the author until it is
+  // released (DEC-04). Only release moves `status`.
+  decision              DecisionOutcome?
+  decisionSource        DecisionSource?
+  decisionNote          String?
+  decidedAt             DateTime?
+  decidedById           String?
+  chairRecommendation   DecisionOutcome?
+  chairRecommendedById  String?
+  chairRecommendedAt    DateTime?
+  presentationType      PresentationTypeCode?
+  decisionReleasedAt    DateTime?
+  reviewsReleased       Boolean          @default(false)
+  revisionDueAt         DateTime?
+  slotResponse          SlotResponse?
+  slotRespondedAt       DateTime?
+  /// DEC-08: the waitlisted submission that was offered this declined slot
+  slotFilledById        String?
+  confirmedAt           DateTime?
+  registrationFlaggedAt DateTime?
+
   deletedAt                 DateTime?
   createdAt                 DateTime         @default(now())
   updatedAt                 DateTime         @updatedAt
@@ -428,17 +458,20 @@ model Submission {
   organisation   Organisation            @relation(fields: [orgId], references: [id], onDelete: Cascade)
   event          Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   submitter      User                    @relation("SubmissionSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  decidedBy      User?                   @relation("SubmissionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
   submissionType SubmissionType          @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
   category       Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   authors           SubmissionAuthor[]
   affiliations      SubmissionAffiliation[]
   versions          SubmissionVersion[]
   reviewAssignments ReviewAssignment[]
+  emailLogs         EmailLog[]
 
   @@unique([eventId, refNo])
   @@index([eventId])
   @@index([orgId])
   @@index([submitterId])
+  @@index([eventId, decision])
   @@map("submissions")
 }
 
@@ -585,4 +618,76 @@ model ReviewScore {
   @@index([reviewId])
   @@index([criterionId])
   @@map("review_scores")
+}
+
+// ─── Module 4 — Decisions and notifications ─────────────────────────────────
+
+enum DecisionOutcome {
+  ACCEPT_ORAL
+  ACCEPT_POSTER
+  REJECT
+  REVISIONS_REQUESTED
+  WAITLIST
+}
+
+enum DecisionSource {
+  MANUAL
+  CUTOFF
+}
+
+enum SlotResponse {
+  CONFIRMED
+  DECLINED
+}
+
+enum EmailDeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+  NOT_CONFIGURED
+}
+
+/// GEN-03 / DEC-05: editable email template per event and key
+/// (e.g. "decision.accept_oral"). Missing rows fall back to built-in defaults.
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  eventId   String
+  key       String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, key])
+  @@index([orgId])
+  @@map("email_templates")
+}
+
+/// GEN-03: one row per email the system tried to send.
+model EmailLog {
+  id           String              @id @default(cuid())
+  orgId        String
+  eventId      String
+  submissionId String?
+  templateKey  String
+  toEmail      String
+  subject      String
+  body         String
+  status       EmailDeliveryStatus @default(QUEUED)
+  error        String?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submission   Submission?  @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submissionId])
+  @@map("email_logs")
 }

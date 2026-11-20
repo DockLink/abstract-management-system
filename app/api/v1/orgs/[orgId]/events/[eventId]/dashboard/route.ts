@@ -24,6 +24,9 @@ export async function GET(request: Request, context: Ctx) {
       membersCount,
       deadlineExtensionsCount,
       eligibilityRule,
+      byStatus,
+      byCategory,
+      byAssignmentStatus,
     ] = await Promise.all([
       prisma.category.count({ where: { eventId, orgId } }),
       prisma.submissionType.count({ where: { eventId, orgId } }),
@@ -31,7 +34,46 @@ export async function GET(request: Request, context: Ctx) {
       prisma.member.count({ where: { orgId } }),
       prisma.deadlineExtension.count({ where: { eventId, orgId } }),
       prisma.eligibilityRule.findUnique({ where: { eventId } }),
+      // EVT-11 metrics (Modules 2 and 3). Scoped by org + event; soft-deleted rows excluded.
+      prisma.submission.groupBy({
+        by: ["status"],
+        where: { eventId, orgId, deletedAt: null },
+        _count: { _all: true },
+      }),
+      prisma.submission.groupBy({
+        by: ["categoryId"],
+        where: { eventId, orgId, deletedAt: null },
+        _count: { _all: true },
+      }),
+      prisma.reviewAssignment.groupBy({
+        by: ["status"],
+        where: { eventId, orgId },
+        _count: { _all: true },
+      }),
     ]);
+
+    const submissionsByStatus: Record<string, number> = {};
+    for (const row of byStatus) submissionsByStatus[row.status] = row._count._all;
+
+    const categoryIds = byCategory.map((r) => r.categoryId).filter((id): id is string => !!id);
+    const categoryNames = new Map(
+      (
+        await prisma.category.findMany({
+          where: { id: { in: categoryIds }, eventId, orgId },
+          select: { id: true, name: true },
+        })
+      ).map((c) => [c.id, c.name]),
+    );
+    const submissionsByCategory = byCategory.map((r) => ({
+      categoryId: r.categoryId ?? "none",
+      name: r.categoryId ? (categoryNames.get(r.categoryId) ?? "Unknown track") : "No track chosen",
+      count: r._count._all,
+    }));
+
+    const assignmentCount = (status: string) =>
+      byAssignmentStatus.find((r) => r.status === status)?._count._all ?? 0;
+    const reviewsDone = assignmentCount("COMPLETED");
+    const reviewsPending = assignmentCount("PENDING") + assignmentCount("IN_PROGRESS");
 
     const event = access.event;
     const portalState = derivePortalState(event);
@@ -55,14 +97,15 @@ export async function GET(request: Request, context: Ctx) {
       event: serializeEvent(event),
       portalState,
       configCompleteness,
-      // Module 2+ metrics — stable contract, zeroed until those modules land
-      submissionsByStatus: {},
-      submissionsByCategory: [],
+      submissionsByStatus,
+      submissionsByCategory,
+      // Conflicts are excluded: they're waiting for reassignment, not review.
       reviews: {
-        done: 0,
-        pending: 0,
-        total: 0,
+        done: reviewsDone,
+        pending: reviewsPending,
+        total: reviewsDone + reviewsPending,
       },
+      // Module 5 (ticketing) isn't built yet.
       registrations: {
         count: 0,
         revenue: 0,

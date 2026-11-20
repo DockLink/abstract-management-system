@@ -42,7 +42,7 @@ export function EventHeaderPreview({
             fill
             sizes="(min-width: 1024px) 40rem, 100vw"
             className="object-cover"
-            unoptimized
+            unoptimized={bannerUrl.startsWith("blob:")}
           />
         </div>
       ) : (
@@ -58,7 +58,7 @@ export function EventHeaderPreview({
                 fill
                 sizes="56px"
                 className="object-contain p-1"
-                unoptimized
+                unoptimized={logoUrl.startsWith("blob:")}
               />
             </div>
           ) : (

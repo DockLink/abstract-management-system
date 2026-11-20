@@ -38,7 +38,7 @@ export function EventHero({
     <header className="bg-background">
       {bannerUrl ? (
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted sm:aspect-[3/1] lg:aspect-[4/1]">
-          <Image src={bannerUrl} alt="" fill priority sizes="100vw" className="object-cover" unoptimized />
+          <Image src={bannerUrl} alt="" fill priority sizes="100vw" className="object-cover" />
         </div>
       ) : (
         <BrandGrid aria-hidden className="h-28 w-full sm:h-36 lg:h-44" />
@@ -48,7 +48,7 @@ export function EventHero({
         <div className={cn("flex flex-col gap-5", logoUrl ? "-mt-10 sm:-mt-12" : "pt-6 md:pt-8")}>
           {logoUrl ? (
             <span className="relative block size-20 shrink-0 overflow-hidden rounded-lg border border-border bg-white shadow-overlay sm:size-24">
-              <Image src={logoUrl} alt={`${name} logo`} fill sizes="96px" className="object-contain p-2" unoptimized />
+              <Image src={logoUrl} alt={`${name} logo`} fill sizes="96px" className="object-contain p-2" />
             </span>
           ) : null}
 

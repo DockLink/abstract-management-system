@@ -164,7 +164,7 @@ function DashboardBody({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Abstracts submitted" value={total} hint="All statuses" href={`${base}/submissions`} linkLabel="View submissions" />
+        <StatCard label="Abstracts" value={total} hint="All statuses, including drafts" href={`${base}/submissions`} linkLabel="View submissions" />
         <StatCard
           label="Reviews done"
           value={reviewTotal ? `${done} of ${reviewTotal}` : "0"}

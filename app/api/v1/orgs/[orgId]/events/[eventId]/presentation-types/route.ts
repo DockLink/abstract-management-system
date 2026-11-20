@@ -40,8 +40,12 @@ export async function GET(request: Request, context: Ctx) {
     if (!auth.ok) return auth.response;
 
     const { orgId, eventId } = await routeParams(context);
+    // Admins get everything. Any other signed-in user may read the options an
+    // author picks from when submitting (same rule as POST /submissions);
+    // a missing event still 404s.
     const access = await requireEventAdmin(auth.ctx, orgId, eventId);
-    if (!access.ok) return access.response;
+    if (!access.ok && access.response.status !== 403) return access.response;
+    // Nothing organiser-only in this payload.
 
     const types = await prisma.presentationType.findMany({
       where: { eventId, orgId },

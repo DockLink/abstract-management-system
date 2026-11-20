@@ -11,7 +11,19 @@ import {
   Pencil,
   Plus,
   Ticket,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DeadlineCountdown } from "@/components/shared/deadline-countdown";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -71,6 +83,10 @@ export function SubmitterDashboard({
 
   const [decisionSub, setDecisionSub] = useState<SubmissionDto | null>(null);
 
+  const [declineTarget, setDeclineTarget] = useState<SubmissionDto | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [respondingSlot, setRespondingSlot] = useState(false);
+
   const base = `/api/v1/orgs/${orgId}/events/${eventId}`;
   const portal = `/${orgSlug}/${eventSlug}`;
 
@@ -122,6 +138,45 @@ export function SubmitterDashboard({
       }
     } finally {
       setWithdrawing(false);
+    }
+  }
+
+  async function handleConfirmSlot(sub: SubmissionDto) {
+    setRespondingSlot(true);
+    try {
+      const res = await apiFetch(`${base}/submissions/${sub.id}/slot`, {
+        method: "POST",
+        body: { response: "CONFIRMED" },
+      });
+      if (res.ok) {
+        toast.success("Presentation slot confirmed");
+        await loadSubmissions();
+      } else {
+        toast.error("Couldn't confirm the slot", { description: res.error.message });
+      }
+    } finally {
+      setRespondingSlot(false);
+    }
+  }
+
+  async function handleDeclineSlot() {
+    if (!declineTarget) return;
+    setRespondingSlot(true);
+    try {
+      const res = await apiFetch(`${base}/submissions/${declineTarget.id}/slot`, {
+        method: "POST",
+        body: { response: "DECLINED", reason: declineReason.trim() || undefined },
+      });
+      if (res.ok) {
+        toast.success("Presentation slot declined");
+        setDeclineTarget(null);
+        setDeclineReason("");
+        await loadSubmissions();
+      } else {
+        toast.error("Couldn't decline the slot", { description: res.error.message });
+      }
+    } finally {
+      setRespondingSlot(false);
     }
   }
 
@@ -222,17 +277,70 @@ export function SubmitterDashboard({
                     </p>
                   ) : null}
 
+                  {sub.status === "REVISIONS_REQUESTED" ? (
+                    <div className="mt-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-200">
+                      <p className="font-semibold">Revisions requested by the committee.</p>
+                      {sub.revisionDueAt ? (
+                        <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                          Please submit your revised abstract before {formatLongDate(sub.revisionDueAt)}.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {accepted ? (
-                    <div className="mt-4 flex flex-col gap-3 rounded-md border border-success/30 bg-success-tint p-4 sm:flex-row sm:items-center">
-                      <p className="flex-1 text-base text-success-foreground">
-                        Congratulations — accepted. Register the presenting author to confirm the slot.
-                      </p>
-                      <Button asChild>
-                        <Link href={`${portal}/register`}>
-                          <Ticket data-icon="inline-start" />
-                          Register now
-                        </Link>
-                      </Button>
+                    <div className="mt-4 flex flex-col gap-3 rounded-md border border-success/30 bg-success-tint p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <p className="text-base font-semibold text-success-foreground">
+                            Congratulations — accepted for {sub.presentationType ? `${sub.presentationType.toLowerCase()} presentation` : "presentation"}.
+                          </p>
+                          {sub.slotResponse === "CONFIRMED" ? (
+                            <p className="text-sm text-emerald-700 dark:text-emerald-400 font-medium mt-1">
+                              ✓ Presentation slot confirmed. Please complete registration before the deadline.
+                            </p>
+                          ) : sub.slotResponse === "DECLINED" ? (
+                            <p className="text-sm text-red-600 dark:text-red-400 font-medium mt-1">
+                              Slot declined.
+                            </p>
+                          ) : (
+                            <p className="text-sm text-success-foreground/80 mt-1">
+                              Please confirm whether you will present at the symposium, then register.
+                            </p>
+                          )}
+                        </div>
+                        {sub.slotResponse === "CONFIRMED" ? (
+                          <Button asChild size="sm">
+                            <Link href={`${portal}/register`}>
+                              <Ticket data-icon="inline-start" />
+                              Register now
+                            </Link>
+                          </Button>
+                        ) : !sub.slotResponse ? (
+                          <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                              disabled={respondingSlot}
+                              onClick={() => void handleConfirmSlot(sub)}
+                            >
+                              Confirm slot
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                              disabled={respondingSlot}
+                              onClick={() => {
+                                setDeclineTarget(sub);
+                                setDeclineReason("");
+                              }}
+                            >
+                              Decline slot
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -281,16 +389,44 @@ export function SubmitterDashboard({
       >
         {decisionSub ? (
           <div className="space-y-4">
-            <StatusBadge status={decisionSub.status} />
+            <div className="flex items-center gap-2">
+              <StatusBadge status={decisionSub.status} />
+              {decisionSub.presentationType && (
+                <span className="font-semibold text-xs px-2 py-0.5 rounded bg-muted">
+                  {decisionSub.presentationType} Presentation
+                </span>
+              )}
+            </div>
             <p className="text-base">{STATUS_COPY[decisionSub.status]}</p>
             {decisionSub.refNo ? (
               <p className="text-sm text-muted-foreground">
                 Reference <span className="font-mono font-semibold text-foreground">{decisionSub.refNo}</span>
               </p>
             ) : null}
-            <p className="text-sm text-muted-foreground">
-              Reviewer comments appear here if the organisers choose to share them.
-            </p>
+
+            {decisionSub.decisionNote && (
+              <div className="bg-muted/30 p-3 rounded text-sm text-foreground">
+                <span className="text-xs font-semibold text-muted-foreground block mb-1">Committee Note:</span>
+                {decisionSub.decisionNote}
+              </div>
+            )}
+
+            {decisionSub.reviewsReleased && decisionSub.reviewerComments && decisionSub.reviewerComments.length > 0 ? (
+              <div className="space-y-2 pt-2 border-t">
+                <h3 className="text-sm font-semibold">Reviewer Comments</h3>
+                {decisionSub.reviewerComments.map((cmt, idx) => (
+                  <div key={idx} className="bg-muted/40 p-3 rounded text-sm text-foreground">
+                    <div className="text-xs font-semibold text-muted-foreground mb-1">Reviewer {idx + 1}</div>
+                    <p className="whitespace-pre-line">{cmt}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Reviewer comments appear here if the organisers choose to share them.
+              </p>
+            )}
+
             {decisionSub.status === "ACCEPTED" ? (
               <Button asChild className="w-full sm:w-auto">
                 <Link href={`${portal}/register`}>
@@ -302,6 +438,39 @@ export function SubmitterDashboard({
           </div>
         ) : null}
       </SidePanel>
+
+      <Dialog open={!!declineTarget} onOpenChange={(o) => !o && setDeclineTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline Presentation Slot?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to decline the presentation slot for “{declineTarget?.title}”? This will withdraw your abstract and allow the slot to be offered to a waitlisted author.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="declineReason">Reason (Optional)</Label>
+            <Input
+              id="declineReason"
+              placeholder="e.g. Schedule conflict, unable to travel"
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeclineTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleDeclineSlot()}
+              disabled={respondingSlot}
+            >
+              {respondingSlot ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              Confirm Decline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SidePanel
         open={!!versionSub}

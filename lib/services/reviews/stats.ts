@@ -6,6 +6,8 @@ import {
   ReviewAssignmentStatus,
   ReviewRecommendation,
   SubmissionStatus,
+  type Review,
+  type RubricCriterion,
 } from "@/app/generated/prisma/client";
 
 export interface ProgressSummary {
@@ -316,107 +318,9 @@ export async function getScoresTable(options: {
 
   const criteriaMap = new Map(criteria.map((c) => [c.id, c]));
 
-  const rows: SubmissionScoreRow[] = submissions.map((sub) => {
-    const validAssignments = sub.reviewAssignments.filter(
-      (a) => a.status !== ReviewAssignmentStatus.CONFLICT,
-    );
-    const completedReviews: ReviewScoreDetail[] = [];
-
-    for (const assignment of validAssignments) {
-      const review = assignment.review;
-      if (!review || review.isDraft) continue;
-
-      let totalWeightedScore = 0;
-      let totalWeight = 0;
-      const criterionScores: ReviewScoreDetail["criterionScores"] = [];
-
-      for (const s of review.scores) {
-        const crit = criteriaMap.get(s.criterionId) ?? s.criterion;
-        const weight = crit?.weight ?? 1.0;
-        totalWeightedScore += s.score * weight;
-        totalWeight += weight;
-
-        criterionScores.push({
-          criterionId: s.criterionId,
-          criterionName: crit?.name ?? "Criterion",
-          score: s.score,
-          weight,
-        });
-      }
-
-      const weightedScore =
-        totalWeight > 0
-          ? Math.round((totalWeightedScore / totalWeight) * 100) / 100
-          : 0;
-
-      completedReviews.push({
-        reviewerId: assignment.reviewer.id,
-        reviewerName: assignment.reviewer.fullName || assignment.reviewer.email,
-        recommendation: review.recommendation,
-        weightedScore,
-        criterionScores,
-        commentAuthor: review.commentAuthor,
-        commentCommittee: review.commentCommittee,
-        submittedAt: review.submittedAt ? review.submittedAt.toISOString() : null,
-      });
-    }
-
-    const scoresList = completedReviews.map((r) => r.weightedScore);
-    const averageScore =
-      scoresList.length > 0
-        ? Math.round(
-            (scoresList.reduce((sum, s) => sum + s, 0) / scoresList.length) * 100,
-          ) / 100
-        : 0;
-
-    const stdDev = computeStandardDeviation(scoresList);
-    const minScore = scoresList.length > 0 ? Math.min(...scoresList) : 0;
-    const maxScore = scoresList.length > 0 ? Math.max(...scoresList) : 0;
-    const scoreGap = scoresList.length > 1 ? Math.round((maxScore - minScore) * 100) / 100 : 0;
-
-    // Check dispute conditions:
-    // 1. Score gap exceeds threshold
-    // 2. Conflicting recommendations (e.g. Accept vs Reject)
-    let isDisputed = false;
-    const disputeReasons: string[] = [];
-
-    if (scoresList.length > 1 && scoreGap >= disagreementThreshold) {
-      isDisputed = true;
-      disputeReasons.push(`Score gap of ${scoreGap} exceeds threshold (${disagreementThreshold})`);
-    }
-
-    const recommendations = completedReviews
-      .map((r) => r.recommendation)
-      .filter((rec): rec is ReviewRecommendation => rec !== null);
-
-    const hasAccept = recommendations.some(
-      (r) => r === ReviewRecommendation.ACCEPT_ORAL || r === ReviewRecommendation.ACCEPT_POSTER,
-    );
-    const hasReject = recommendations.some((r) => r === ReviewRecommendation.REJECT);
-
-    if (hasAccept && hasReject) {
-      isDisputed = true;
-      disputeReasons.push("Conflicting recommendations: Accept vs Reject");
-    }
-
-    return {
-      submissionId: sub.id,
-      refNo: sub.refNo,
-      title: sub.title,
-      categoryId: sub.categoryId,
-      categoryName: sub.category?.name ?? null,
-      preferredPresentationType: sub.preferredPresentationType,
-      completedReviewCount: completedReviews.length,
-      assignedReviewCount: validAssignments.length,
-      averageScore,
-      weightedAverageScore: averageScore,
-      standardDeviation: stdDev,
-      scoreGap,
-      isDisputed,
-      disputeReason: disputeReasons.length > 0 ? disputeReasons.join("; ") : null,
-      reviews: completedReviews,
-    };
-  });
+  const rows: SubmissionScoreRow[] = submissions.map((sub) =>
+    computeSubmissionScoreRow(sub, criteriaMap, disagreementThreshold),
+  );
 
   return {
     data: rows,
@@ -429,3 +333,133 @@ export async function getScoresTable(options: {
   };
 }
 
+type ScoredSubmissionInput = {
+  id: string;
+  refNo: string | null;
+  title: string;
+  categoryId: string | null;
+  category?: { id: string; name: string } | null;
+  preferredPresentationType: string | null;
+  reviewAssignments: Array<{
+    status: ReviewAssignmentStatus;
+    reviewer: { id: string; fullName: string | null; email: string };
+    review:
+      | (Pick<
+          Review,
+          "isDraft" | "recommendation" | "commentAuthor" | "commentCommittee" | "submittedAt"
+        > & {
+          scores: Array<{ criterionId: string; score: number; criterion: RubricCriterion | null }>;
+        })
+      | null;
+  }>;
+};
+
+/**
+ * REV-11 per-abstract maths, shared by the score table and the decision
+ * board (DEC-01) so both always show the same numbers.
+ */
+export function computeSubmissionScoreRow(
+  sub: ScoredSubmissionInput,
+  criteriaMap: Map<string, RubricCriterion>,
+  disagreementThreshold: number,
+): SubmissionScoreRow {
+  const validAssignments = sub.reviewAssignments.filter(
+    (a) => a.status !== ReviewAssignmentStatus.CONFLICT,
+  );
+  const completedReviews: ReviewScoreDetail[] = [];
+
+  for (const assignment of validAssignments) {
+    const review = assignment.review;
+    if (!review || review.isDraft) continue;
+
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+    const criterionScores: ReviewScoreDetail["criterionScores"] = [];
+
+    for (const s of review.scores) {
+      const crit = criteriaMap.get(s.criterionId) ?? s.criterion;
+      const weight = crit?.weight ?? 1.0;
+      totalWeightedScore += s.score * weight;
+      totalWeight += weight;
+
+      criterionScores.push({
+        criterionId: s.criterionId,
+        criterionName: crit?.name ?? "Criterion",
+        score: s.score,
+        weight,
+      });
+    }
+
+    const weightedScore =
+      totalWeight > 0
+        ? Math.round((totalWeightedScore / totalWeight) * 100) / 100
+        : 0;
+
+    completedReviews.push({
+      reviewerId: assignment.reviewer.id,
+      reviewerName: assignment.reviewer.fullName || assignment.reviewer.email,
+      recommendation: review.recommendation,
+      weightedScore,
+      criterionScores,
+      commentAuthor: review.commentAuthor,
+      commentCommittee: review.commentCommittee,
+      submittedAt: review.submittedAt ? review.submittedAt.toISOString() : null,
+    });
+  }
+
+  const scoresList = completedReviews.map((r) => r.weightedScore);
+  const averageScore =
+    scoresList.length > 0
+      ? Math.round(
+          (scoresList.reduce((sum, s) => sum + s, 0) / scoresList.length) * 100,
+        ) / 100
+      : 0;
+
+  const stdDev = computeStandardDeviation(scoresList);
+  const minScore = scoresList.length > 0 ? Math.min(...scoresList) : 0;
+  const maxScore = scoresList.length > 0 ? Math.max(...scoresList) : 0;
+  const scoreGap = scoresList.length > 1 ? Math.round((maxScore - minScore) * 100) / 100 : 0;
+
+  // Check dispute conditions:
+  // 1. Score gap exceeds threshold
+  // 2. Conflicting recommendations (e.g. Accept vs Reject)
+  let isDisputed = false;
+  const disputeReasons: string[] = [];
+
+  if (scoresList.length > 1 && scoreGap >= disagreementThreshold) {
+    isDisputed = true;
+    disputeReasons.push(`Score gap of ${scoreGap} exceeds threshold (${disagreementThreshold})`);
+  }
+
+  const recommendations = completedReviews
+    .map((r) => r.recommendation)
+    .filter((rec): rec is ReviewRecommendation => rec !== null);
+
+  const hasAccept = recommendations.some(
+    (r) => r === ReviewRecommendation.ACCEPT_ORAL || r === ReviewRecommendation.ACCEPT_POSTER,
+  );
+  const hasReject = recommendations.some((r) => r === ReviewRecommendation.REJECT);
+
+  if (hasAccept && hasReject) {
+    isDisputed = true;
+    disputeReasons.push("Conflicting recommendations: Accept vs Reject");
+  }
+
+  return {
+    submissionId: sub.id,
+    refNo: sub.refNo,
+    title: sub.title,
+    categoryId: sub.categoryId,
+    categoryName: sub.category?.name ?? null,
+    preferredPresentationType: sub.preferredPresentationType,
+    completedReviewCount: completedReviews.length,
+    assignedReviewCount: validAssignments.length,
+    averageScore,
+    weightedAverageScore: averageScore,
+    standardDeviation: stdDev,
+    scoreGap,
+    isDisputed,
+    disputeReason: disputeReasons.length > 0 ? disputeReasons.join("; ") : null,
+    reviews: completedReviews,
+  };
+}

@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { ok, serverError } from "@/lib/api/response";
 import { requireAuth, serializeAppUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
@@ -52,6 +53,8 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
+    // Let Next.js prerender-bailout signals propagate (cacheComponents).
+    unstable_rethrow(error);
     console.error("GET /auth/me", error);
     return serverError();
   }

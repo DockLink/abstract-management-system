@@ -53,7 +53,7 @@ export function ImageAssetField({
             aspect === "square" ? "size-20" : "aspect-[3/1] w-full sm:w-48",
           )}
         >
-          <Image src={url} alt={`Current ${label.toLowerCase()}`} fill sizes="192px" className={aspect === "square" ? "object-contain p-1.5" : "object-cover"} unoptimized />
+          <Image src={url} alt={`Current ${label.toLowerCase()}`} fill sizes="192px" className={aspect === "square" ? "object-contain p-1.5" : "object-cover"} unoptimized={url.startsWith("blob:")} />
         </span>
         <div className="min-w-0 flex-1 text-sm text-muted-foreground">{help}</div>
         <Button type="button" variant="outline" disabled={uploading} onClick={() => ref.current?.click()}>

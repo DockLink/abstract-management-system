@@ -5,6 +5,7 @@ import { toast } from "@/components/shared/toast";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { PageHeader } from "@/components/shared/page-header";
 import { SidePanel } from "@/components/shared/side-panel";
@@ -155,6 +156,17 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
   const [deleting, setDeleting] = useState(false);
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [scoreDetail, setScoreDetail] = useState<SubmissionScoreRowDto | null>(null);
+  // Per-section load failures, so a failed fetch isn't mistaken for "nothing here".
+  type Section = "progress" | "reviewers" | "rubric" | "assignments" | "scores";
+  const [loadErrors, setLoadErrors] = useState<Partial<Record<Section, string>>>({});
+  const noteLoad = useCallback((section: Section, res: { ok: boolean; error?: { message?: string } }) => {
+    setLoadErrors((prev) => {
+      const next = { ...prev };
+      if (res.ok) delete next[section];
+      else next[section] = res.error?.message || "This section couldn't be loaded.";
+      return next;
+    });
+  }, []);
 
   // ─── Data Loading ───
   const loadCategories = useCallback(async () => {
@@ -169,28 +181,32 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       `/api/v1/orgs/${orgId}/events/${eventId}/reviews/progress`,
     );
     if (res.ok) setProgress(res.data);
-  }, [orgId, eventId]);
+    noteLoad("progress", res);
+  }, [orgId, eventId, noteLoad]);
 
   const loadReviewers = useCallback(async () => {
     const res = await apiFetch<ReviewerItem[]>(
       `/api/v1/orgs/${orgId}/events/${eventId}/reviewers`,
     );
     if (res.ok) setReviewers(res.data);
-  }, [orgId, eventId]);
+    noteLoad("reviewers", res);
+  }, [orgId, eventId, noteLoad]);
 
   const loadRubric = useCallback(async () => {
     const res = await apiFetch<RubricCriterionItem[]>(
       `/api/v1/orgs/${orgId}/events/${eventId}/rubric-criteria`,
     );
     if (res.ok) setRubricCriteria(res.data);
-  }, [orgId, eventId]);
+    noteLoad("rubric", res);
+  }, [orgId, eventId, noteLoad]);
 
   const loadAssignments = useCallback(async () => {
     const res = await apiFetch<{ data: AssignmentItem[] }>(
       `/api/v1/orgs/${orgId}/events/${eventId}/reviews/assignments?limit=100`,
     );
     if (res.ok) setAssignments(res.data.data);
-  }, [orgId, eventId]);
+    noteLoad("assignments", res);
+  }, [orgId, eventId, noteLoad]);
 
   const loadScoresTable = useCallback(async () => {
     let url = `/api/v1/orgs/${orgId}/events/${eventId}/reviews/scores-table?limit=100`;
@@ -200,7 +216,8 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
 
     const res = await apiFetch<{ data: SubmissionScoreRowDto[] }>(url);
     if (res.ok) setScoresTable(res.data.data);
-  }, [orgId, eventId, scoreCategoryFilter, scoreDisagreementThreshold, scoreSearch]);
+    noteLoad("scores", res);
+  }, [orgId, eventId, scoreCategoryFilter, scoreDisagreementThreshold, scoreSearch, noteLoad]);
 
   const loadSubmissions = useCallback(async () => {
     const res = await apiFetch<{ data: Array<{ id: string; refNo: string | null; title: string }> }>(
@@ -703,7 +720,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       </div>
 
       {/* ─── Progress (REV-10) ─── */}
-      {activeTab === "progress" && progress ? (
+      {activeTab === "progress" && loadErrors.progress ? (
+        <ErrorState title="Review progress didn't load" description={loadErrors.progress} onRetry={() => void loadProgress()} />
+      ) : activeTab === "progress" && progress ? (
         <div className="space-y-8">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <StatCard label="Abstracts" value={progress.overview.totalSubmissions} hint={`${progress.overview.underReviewSubmissions} under review`} />
@@ -805,7 +824,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       ) : null}
 
       {/* ─── TAB 2: Reviewer Pool (REV-01, REV-02, REV-14) ─── */}
-      {activeTab === "reviewers" && (
+      {activeTab === "reviewers" && loadErrors.reviewers ? (
+        <ErrorState title="The reviewer pool didn't load" description={loadErrors.reviewers} onRetry={() => void loadReviewers()} />
+      ) : activeTab === "reviewers" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -928,7 +949,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       )}
 
       {/* ─── TAB 3: Rubric Builder (REV-04) ─── */}
-      {activeTab === "rubric" && (
+      {activeTab === "rubric" && loadErrors.rubric ? (
+        <ErrorState title="The rubric didn't load" description={loadErrors.rubric} onRetry={() => void loadRubric()} />
+      ) : activeTab === "rubric" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -1038,7 +1061,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       )}
 
       {/* ─── TAB 4: Assignments & Auto-Assign (REV-06, REV-13) ─── */}
-      {activeTab === "assignments" && (
+      {activeTab === "assignments" && loadErrors.assignments ? (
+        <ErrorState title="Assignments didn't load" description={loadErrors.assignments} onRetry={() => void loadAssignments()} />
+      ) : activeTab === "assignments" && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -1240,6 +1265,8 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             columns={scoreColumns}
             rows={scoresTable}
             getRowId={(r) => r.submissionId}
+            error={loadErrors.scores}
+            onRetry={() => void loadScoresTable()}
             rowClassName={(r) => (r.isDisputed ? "bg-danger-tint/40 border-danger/30" : undefined)}
             empty={{
               icon: Scale,

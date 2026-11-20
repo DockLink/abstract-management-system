@@ -37,15 +37,20 @@ export async function GET(request: Request, context: Ctx) {
     if (!auth.ok) return auth.response;
 
     const { orgId, eventId } = await routeParams(context);
+    // Admins get everything. Any other signed-in user may read the options an
+    // author picks from when submitting (same rule as POST /submissions);
+    // a missing event still 404s.
     const access = await requireEventAdmin(auth.ctx, orgId, eventId);
-    if (!access.ok) return access.response;
+    if (!access.ok && access.response.status !== 403) return access.response;
+    const isAdmin = access.ok;
 
     const categories = await prisma.category.findMany({
       where: { eventId, orgId },
       orderBy: { sortOrder: "asc" },
     });
 
-    return ok(categories.map(serializeCategory));
+    // Track chairs' identities are for organisers only.
+    return ok(categories.map((c) => (isAdmin ? serializeCategory(c) : { ...serializeCategory(c), chairUserId: null })));
   } catch (error) {
     console.error("GET /categories", error);
     return serverError();

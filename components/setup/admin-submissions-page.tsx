@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState } from "@/components/shared/empty-state";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import { FilterBar } from "@/components/shared/filter-bar";
+import { SidePanel } from "@/components/shared/side-panel";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -28,8 +27,8 @@ import {
 import { apiFetch } from "@/lib/api/client";
 import { formatLongDateTime } from "@/lib/dates";
 import { EventIcons } from "@/lib/events/icons";
+import { STATUS_MAP, normalizeStatus } from "@/lib/status";
 import {
-  Search,
   Eye,
   History,
   AlertTriangle,
@@ -49,6 +48,30 @@ type DuplicateCluster = {
   similarity: number;
 };
 
+const STATUS_OPTIONS = [
+  "DRAFT",
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "REVISIONS_REQUESTED",
+  "ACCEPTED",
+  "CONFIRMED",
+  "REJECTED",
+  "WAITLISTED",
+  "WITHDRAWN",
+] as const;
+
+function statusLabel(status: string) {
+  const key = normalizeStatus(status);
+  return key ? STATUS_MAP[key].label : status;
+}
+
+function ercLabel(status: string | null | undefined) {
+  if (status === "APPROVED") return "Approved";
+  if (status === "EXEMPT") return "Exempt";
+  if (status === "NOT_APPLICABLE") return "Not applicable";
+  return "Not given";
+}
+
 export function AdminSubmissionsPage({
   orgId,
   eventId,
@@ -62,12 +85,15 @@ export function AdminSubmissionsPage({
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [submissionTypes, setSubmissionTypes] = useState<SubmissionTypeDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  // What's typed; copied to searchTerm after a short pause so typing doesn't refetch per key.
+  const [searchInput, setSearchInput] = useState<string>("");
 
   // Inspect Modal
   const [inspectSub, setInspectSub] = useState<SubmissionDto | null>(null);
@@ -100,8 +126,9 @@ export function AdminSubmissionsPage({
       );
       if (res.ok) {
         setSubmissions(res.data.data);
+        setLoadError(null);
       } else {
-        toast.error(res.error.message || "Failed to load submissions");
+        setLoadError(res.error.message || "The submissions couldn't be loaded.");
       }
     } finally {
       setLoading(false);
@@ -123,6 +150,11 @@ export function AdminSubmissionsPage({
   useEffect(() => {
     void loadSubmissions();
   }, [loadSubmissions]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // Load ERC file signed URL when inspecting
   useEffect(() => {
@@ -150,13 +182,13 @@ export function AdminSubmissionsPage({
         body: { status: newStatus },
       });
       if (res.ok) {
-        toast.success(`Status updated to ${newStatus}`);
+        toast.success(`Status changed to ${statusLabel(newStatus).toLowerCase()}`);
         await loadSubmissions();
         if (inspectSub && inspectSub.id === submissionId) {
           setInspectSub(res.data);
         }
       } else {
-        toast.error(res.error.message || "Failed to update status");
+        toast.error("Couldn't change the status", { description: res.error.message });
       }
     } finally {
       setPatchingId(null);
@@ -188,337 +220,297 @@ export function AdminSubmissionsPage({
       if (res.ok) {
         setDuplicateClusters(res.data.clusters || []);
       } else {
-        toast.error(res.error.message || "Duplicate check failed");
+        toast.error("The duplicate check didn't run", { description: res.error.message });
       }
     } finally {
       setDuplicateLoading(false);
     }
   }
 
+  const activeFilters = [statusFilter, categoryFilter, typeFilter].filter((f) => f !== "ALL").length;
+  const categoryName = (id: string | null | undefined) => categories.find((c) => c.id === id)?.name;
+  const typeName = (id: string | null | undefined) => submissionTypes.find((t) => t.id === id)?.name;
+
+  const columns: DataTableColumn<SubmissionDto>[] = [
+    {
+      id: "ref",
+      header: "Reference",
+      mobile: "meta",
+      className: "whitespace-nowrap",
+      cell: (sub) =>
+        sub.refNo ? (
+          <span className="font-mono text-sm text-muted-foreground">{sub.refNo}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">No reference yet</span>
+        ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      mobile: "meta",
+      className: "whitespace-nowrap",
+      cell: (sub) => <StatusBadge status={sub.status} size="sm" />,
+    },
+    {
+      id: "title",
+      header: "Title",
+      mobile: "title",
+      className: "min-w-56",
+      cell: (sub) => <span className="line-clamp-2 font-medium">{sub.title || "Untitled"}</span>,
+    },
+    {
+      id: "presenter",
+      header: "Presenter",
+      cell: (sub) => {
+        const presenter = sub.authors?.find((a) => a.isPresenting);
+        return presenter ? (
+          <span className="block">
+            <span className="block font-medium">
+              {presenter.surname} {presenter.initials}
+            </span>
+            {presenter.email ? <span className="block text-sm break-all text-muted-foreground">{presenter.email}</span> : null}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Not marked</span>
+        );
+      },
+    },
+    {
+      id: "type",
+      header: "Type and track",
+      cell: (sub) => (
+        <span className="block">
+          <span className="block">{typeName(sub.submissionTypeId) || "—"}</span>
+          <span className="block text-sm text-muted-foreground">{categoryName(sub.categoryId) || "No track chosen"}</span>
+        </span>
+      ),
+    },
+    {
+      id: "words",
+      header: "Words",
+      className: "whitespace-nowrap tabular-nums",
+      cell: (sub) => sub.wordCount,
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <PageHeader
-          title="Submissions"
-          description="Review submitted abstracts, check duplicate titles, view change history, and manage presentation decisions."
-        />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={scanDuplicates}
-          className="gap-1.5 shrink-0"
-        >
-          <AlertTriangle className="size-4 text-warning-foreground" aria-hidden />
-          Check duplicate titles
-        </Button>
-      </div>
+      <PageHeader
+        title="Submissions"
+        description="Every abstract for this event. Open one to read it, check its ethics approval and change its status."
+        actions={
+          <Button type="button" variant="outline" onClick={scanDuplicates}>
+            <AlertTriangle data-icon="inline-start" className="text-warning-foreground" aria-hidden />
+            Check duplicate titles
+          </Button>
+        }
+      />
 
-      {/* Filter Toolbar */}
-      <Card className="p-4">
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              placeholder="Search title…"
-              aria-label="Search submissions by title"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 text-sm"
-            />
-          </div>
+      <FilterBar
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        searchPlaceholder="Search titles"
+        searchLabel="Search submissions by title"
+        activeCount={activeFilters}
+        onClear={() => {
+          setSearchInput("");
+          setSearchTerm("");
+          setStatusFilter("ALL");
+          setCategoryFilter("ALL");
+          setTypeFilter("ALL");
+        }}
+        resultCount={loading || loadError ? undefined : { shown: submissions.length, noun: submissions.length === 1 ? "abstract" : "abstracts" }}
+      >
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger aria-label="Filter by status" className="md:w-48">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All statuses</SelectItem>
+            {STATUS_OPTIONS.map((st) => (
+              <SelectItem key={st} value={st}>{statusLabel(st)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger aria-label="Filter by track" className="md:w-56">
+            <SelectValue placeholder="All tracks" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All tracks</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger aria-label="Filter by submission type" className="md:w-52">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All types</SelectItem>
+            {submissionTypes.map((t) => (
+              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterBar>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger aria-label="Filter by status">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
-              <SelectItem value="SUBMITTED">Submitted</SelectItem>
-              <SelectItem value="UNDER_REVIEW">Under review</SelectItem>
-              <SelectItem value="REVISIONS_REQUESTED">Revisions requested</SelectItem>
-              <SelectItem value="ACCEPTED">Accepted</SelectItem>
-              <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-              <SelectItem value="REJECTED">Rejected</SelectItem>
-              <SelectItem value="WAITLISTED">Waitlisted</SelectItem>
-              <SelectItem value="WITHDRAWN">Withdrawn</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger aria-label="Filter by track">
-              <SelectValue placeholder="All tracks" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All tracks</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger aria-label="Filter by submission type">
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All types</SelectItem>
-              {submissionTypes.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
-
-      {/* Submissions List */}
-      {loading ? (
-        <div className="flex min-h-[300px] items-center justify-center">
-          <p className="text-sm text-muted-foreground animate-pulse">Loading submissions…</p>
-        </div>
-      ) : submissions.length === 0 ? (
-        <EmptyState
-          icon={EventIcons.submissions}
-          title="No submissions found"
-          description="No abstracts match your filter criteria."
-        />
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted/40 border-b border-border text-xs font-semibold text-muted-foreground">
-                <tr>
-                  <th className="py-3 px-4">Reference</th>
-                  <th className="py-3 px-4">Title</th>
-                  <th className="py-3 px-4">Presenter</th>
-                  <th className="py-3 px-4">Type & category</th>
-                  <th className="py-3 px-4">Words</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {submissions.map((sub) => {
-                  const presenter = sub.authors?.find((a) => a.isPresenting);
-                  const cat = categories.find((c) => c.id === sub.categoryId);
-                  const subType = submissionTypes.find((t) => t.id === sub.submissionTypeId);
-
-                  return (
-                    <tr key={sub.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-xs text-muted-foreground whitespace-nowrap">
-                        {sub.refNo || "Draft"}
-                      </td>
-                      <td className="py-3 px-4 max-w-xs font-medium text-foreground">
-                        <div className="truncate" title={sub.title}>
-                          {sub.title || "Untitled"}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-xs">
-                        {presenter ? (
-                          <div>
-                            <p className="font-semibold text-foreground">
-                              {presenter.surname}, {presenter.initials}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{presenter.email}</p>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground italic">None marked</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-xs">
-                        <p className="font-medium text-foreground">{subType?.name || "General"}</p>
-                        <p className="text-xs text-muted-foreground">{cat?.name || "Uncategorized"}</p>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-xs font-mono">
-                        {sub.wordCount}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <Badge variant="outline" className="text-xs font-semibold">
-                          {sub.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openVersions(sub)}
-                            title="Version history"
-                            aria-label={`Version history for ${sub.refNo ?? sub.title}`}
-                          >
-                            <History className="size-4" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setInspectSub(sub)}
-                          >
-                            <Eye data-icon="inline-start" aria-hidden />
-                            Inspect
-                            <span className="sr-only"> {sub.refNo ?? sub.title}</span>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Inspect Modal */}
-      <Dialog open={!!inspectSub} onOpenChange={(open) => !open && setInspectSub(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-6">
-          <DialogHeader>
-            <div className="flex items-center justify-between gap-2 pr-6">
-              <Badge variant="outline" className="font-mono text-xs font-bold">
-                {inspectSub?.refNo || "Draft"}
-              </Badge>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Status:</span>
-                <Select
-                  value={inspectSub?.status}
-                  onValueChange={(val) => {
-                    if (inspectSub) void updateStatus(inspectSub.id, val);
-                  }}
-                  disabled={patchingId === inspectSub?.id}
-                >
-                  <SelectTrigger className="w-44" aria-label="Change status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DRAFT">Draft</SelectItem>
-                    <SelectItem value="SUBMITTED">Submitted</SelectItem>
-                    <SelectItem value="UNDER_REVIEW">Under review</SelectItem>
-                    <SelectItem value="REVISIONS_REQUESTED">Revisions requested</SelectItem>
-                    <SelectItem value="ACCEPTED">Accepted</SelectItem>
-                    <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                    <SelectItem value="REJECTED">Rejected</SelectItem>
-                    <SelectItem value="WAITLISTED">Waitlisted</SelectItem>
-                    <SelectItem value="WITHDRAWN">Withdrawn</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogTitle className="text-xl font-bold tracking-tight text-foreground mt-2">
-              {inspectSub?.title}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto py-4 space-y-6 pr-1 text-sm">
-            {/* Authors & Affiliations */}
-            <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
-              <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                Authors & affiliations
-              </p>
-              <p className="font-semibold text-foreground text-sm">
-                {inspectSub?.authors?.map((a, i) => (
-                  <span key={a.id}>
-                    <span className={a.isPresenting ? "underline decoration-primary font-bold" : ""}>
-                      {a.surname} {a.initials}
-                    </span>
-                    {a.affiliationNos && a.affiliationNos.length > 0 ? (
-                      <sup className="text-primary font-bold">{a.affiliationNos.join(",")}</sup>
-                    ) : null}
-                    {i < (inspectSub.authors?.length || 0) - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </p>
-              {inspectSub?.affiliations && inspectSub.affiliations.length > 0 ? (
-                <div className="text-xs text-muted-foreground space-y-0.5 pt-1">
-                  {inspectSub.affiliations.map((aff) => (
-                    <p key={aff.number}>
-                      <sup>{aff.number}</sup> {aff.text}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-
-            {/* Abstract Sections */}
-            <div className="space-y-4">
-              <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                Abstract Body ({inspectSub?.wordCount} words)
-              </p>
-              {inspectSub?.abstractBody &&
-                Object.entries(inspectSub.abstractBody).map(([key, html]) => (
-                  <div key={key} className="space-y-1 rounded-lg border border-border bg-card p-3.5">
-                    <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                      {key}
-                    </span>
-                    <div
-                      className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: String(html) }}
-                    />
-                  </div>
-                ))}
-            </div>
-
-            {/* Ethics & Declarations info */}
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-border p-3.5 space-y-1">
-                <span className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                  Ethics (ERC)
-                </span>
-                <p className="text-xs font-medium">Status: {inspectSub?.ercStatus || "N/A"}</p>
-                {inspectSub?.ercRefNo ? (
-                  <p className="text-xs text-muted-foreground">Ref: {inspectSub.ercRefNo}</p>
-                ) : null}
-                {inspectSub?.ercInstitution ? (
-                  <p className="text-xs text-muted-foreground">Inst: {inspectSub.ercInstitution}</p>
-                ) : null}
-                {ercFileUrl ? (
-                  <a
-                    href={ercFileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                  >
-                    <Download className="size-3.5" />
-                    Download ERC certificate (PDF)
-                  </a>
-                ) : null}
-              </div>
-
-              <div className="rounded-lg border border-border p-3.5 space-y-1">
-                <span className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                  Declarations
-                </span>
-                <p className="text-xs">
-                  Consent:{" "}
-                  <strong>{inspectSub?.declarations?.allAuthorsConsented ? "Yes" : "No"}</strong>
-                </p>
-                <p className="text-xs">
-                  Confidentiality:{" "}
-                  <strong>
-                    {inspectSub?.declarations?.noIdentifiablePatientData ? "Yes" : "No"}
-                  </strong>
-                </p>
-                <p className="text-xs">
-                  COI:{" "}
-                  <strong>
-                    {inspectSub?.declarations?.conflictOfInterest ? "Declared" : "None"}
-                  </strong>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="border-t border-border pt-4">
-            <Button type="button" variant="outline" onClick={() => setInspectSub(null)}>
-              Close
+      <DataTable
+        caption="Submissions"
+        columns={columns}
+        rows={submissions}
+        getRowId={(sub) => sub.id}
+        loading={loading && submissions.length === 0}
+        error={loadError}
+        onRetry={() => void loadSubmissions()}
+        empty={
+          activeFilters || searchTerm
+            ? { icon: EventIcons.submissions, title: "No abstracts match", description: "Try another search or clear the filters." }
+            : { icon: EventIcons.submissions, title: "No abstracts yet", description: "Abstracts appear here as authors start their submissions." }
+        }
+        rowActions={(sub) => (
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => void openVersions(sub)}
+              title="Version history"
+              aria-label={`Version history for ${sub.refNo ?? sub.title}`}
+            >
+              <History aria-hidden />
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <Button type="button" variant="outline" size="sm" onClick={() => setInspectSub(sub)}>
+              <Eye data-icon="inline-start" aria-hidden />
+              View
+              <span className="sr-only"> {sub.refNo ?? sub.title}</span>
+            </Button>
+          </div>
+        )}
+      />
+
+      {/* Abstract detail */}
+      <SidePanel
+        open={!!inspectSub}
+        onOpenChange={(open) => !open && setInspectSub(null)}
+        size="lg"
+        title={inspectSub?.title || "Untitled"}
+        description={
+          inspectSub
+            ? [inspectSub.refNo || "No reference yet", typeName(inspectSub.submissionTypeId), categoryName(inspectSub.categoryId)].filter(Boolean).join(" · ")
+            : undefined
+        }
+        footer={
+          <Button type="button" variant="outline" onClick={() => setInspectSub(null)}>
+            Close
+          </Button>
+        }
+      >
+        {inspectSub ? (
+          <div className="space-y-6 text-base">
+            <section aria-labelledby="sub-status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4">
+              <div>
+                <h3 id="sub-status" className="text-sm text-muted-foreground">Status</h3>
+                <StatusBadge status={inspectSub.status} className="mt-1" />
+              </div>
+              <Select
+                value={inspectSub.status}
+                onValueChange={(val) => void updateStatus(inspectSub.id, val)}
+                disabled={patchingId === inspectSub.id}
+              >
+                <SelectTrigger className="w-52" aria-label="Change status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((st) => (
+                    <SelectItem key={st} value={st}>{statusLabel(st)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </section>
+
+            <section aria-labelledby="sub-authors">
+              <h3 id="sub-authors" className="text-lg font-semibold">Authors</h3>
+              {inspectSub.authors?.length ? (
+                <>
+                  <p className="mt-1">
+                    {inspectSub.authors.map((a, i) => (
+                      <span key={a.id}>
+                        <span className={a.isPresenting ? "underline decoration-2 underline-offset-2" : undefined}>
+                          {a.surname} {a.initials}
+                        </span>
+                        {a.affiliationNos && a.affiliationNos.length > 0 ? <sup>{a.affiliationNos.join(",")}</sup> : null}
+                        {i < (inspectSub.authors?.length || 0) - 1 ? ", " : ""}
+                      </span>
+                    ))}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">Presenting author underlined.</p>
+                </>
+              ) : (
+                <p className="mt-1 text-muted-foreground">No authors added yet.</p>
+              )}
+              {inspectSub.affiliations && inspectSub.affiliations.length > 0 ? (
+                <ol className="mt-2 space-y-0.5 text-sm text-muted-foreground">
+                  {inspectSub.affiliations.map((aff) => (
+                    <li key={aff.number}>
+                      <sup>{aff.number}</sup> {aff.text}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </section>
+
+            <section aria-labelledby="sub-abstract">
+              <h3 id="sub-abstract" className="text-lg font-semibold">
+                Abstract <span className="text-sm font-normal text-muted-foreground">· {inspectSub.wordCount} words</span>
+              </h3>
+              <div className="mt-2 space-y-4 rounded-lg border border-border bg-card p-4">
+                {inspectSub.abstractBody && Object.keys(inspectSub.abstractBody).length ? (
+                  Object.entries(inspectSub.abstractBody).map(([key, html]) => (
+                    <div key={key}>
+                      <h4 className="font-semibold capitalize">{key.replace(/_/g, " ")}</h4>
+                      <div className="rich-text" dangerouslySetInnerHTML={{ __html: String(html) }} />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">Nothing written yet.</p>
+                )}
+              </div>
+            </section>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <section aria-labelledby="sub-erc" className="rounded-lg border border-border p-4">
+                <h3 id="sub-erc" className="font-semibold">Ethics approval</h3>
+                <dl className="mt-2 space-y-1 text-sm">
+                  <div className="flex gap-2"><dt className="text-muted-foreground">Status</dt><dd>{ercLabel(inspectSub.ercStatus)}</dd></div>
+                  {inspectSub.ercRefNo ? <div className="flex gap-2"><dt className="text-muted-foreground">Reference</dt><dd className="break-all">{inspectSub.ercRefNo}</dd></div> : null}
+                  {inspectSub.ercInstitution ? <div className="flex gap-2"><dt className="text-muted-foreground">Committee</dt><dd>{inspectSub.ercInstitution}</dd></div> : null}
+                </dl>
+                {ercFileUrl ? (
+                  <Button asChild variant="outline" size="sm" className="mt-3">
+                    <a href={ercFileUrl} target="_blank" rel="noreferrer">
+                      <Download data-icon="inline-start" aria-hidden />
+                      Download certificate (PDF)
+                    </a>
+                  </Button>
+                ) : inspectSub.hasErcFile ? (
+                  <p className="mt-3 text-sm text-muted-foreground">Preparing download link…</p>
+                ) : null}
+              </section>
+
+              <section aria-labelledby="sub-decl" className="rounded-lg border border-border p-4">
+                <h3 id="sub-decl" className="font-semibold">Declarations</h3>
+                <dl className="mt-2 space-y-1 text-sm">
+                  <div className="flex justify-between gap-2"><dt className="text-muted-foreground">All authors consented</dt><dd className="font-medium">{inspectSub.declarations?.allAuthorsConsented ? "Yes" : "No"}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-muted-foreground">No identifiable patient data</dt><dd className="font-medium">{inspectSub.declarations?.noIdentifiablePatientData ? "Yes" : "No"}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Conflict of interest</dt><dd className="font-medium">{inspectSub.declarations?.conflictOfInterest ? "Declared" : "None"}</dd></div>
+                </dl>
+              </section>
+            </div>
+          </div>
+        ) : null}
+      </SidePanel>
 
       {/* Version History Modal (SUB-13) */}
       <Dialog open={!!versionSub} onOpenChange={(open) => !open && setVersionSub(null)}>

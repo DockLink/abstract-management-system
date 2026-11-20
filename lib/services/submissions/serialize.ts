@@ -23,6 +23,14 @@ type SubmissionRow = {
   prevPublishedDetails: string | null;
   submittedAt: Date | null;
   withdrawnAt: Date | null;
+  decision?: string | null;
+  presentationType?: string | null;
+  decisionReleasedAt?: Date | null;
+  reviewsReleased?: boolean;
+  revisionDueAt?: Date | null;
+  slotResponse?: string | null;
+  slotRespondedAt?: Date | null;
+  decisionNote?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -81,6 +89,20 @@ export function serializeSubmission(
     prevPublishedDetails: s.prevPublishedDetails,
     submittedAt: s.submittedAt?.toISOString() ?? null,
     withdrawnAt: s.withdrawnAt?.toISOString() ?? null,
+    decision: s.decisionReleasedAt ? s.decision : null,
+    presentationType: s.decisionReleasedAt ? s.presentationType : null,
+    decisionReleasedAt: s.decisionReleasedAt?.toISOString() ?? null,
+    reviewsReleased: s.decisionReleasedAt ? !!s.reviewsReleased : false,
+    revisionDueAt: s.revisionDueAt?.toISOString() ?? null,
+    slotResponse: (s.slotResponse as "CONFIRMED" | "DECLINED" | null) ?? null,
+    slotRespondedAt: s.slotRespondedAt?.toISOString() ?? null,
+    decisionNote: s.decisionReleasedAt ? s.decisionNote : null,
+    reviewerComments:
+      s.decisionReleasedAt && s.reviewsReleased && "reviewAssignments" in s && Array.isArray((s as Record<string, unknown>).reviewAssignments)
+        ? ((s as Record<string, unknown>).reviewAssignments as Array<{ review?: { commentAuthor?: string | null; isDraft?: boolean } | null }>)
+            .filter((a) => a?.review && !a.review.isDraft && a.review.commentAuthor)
+            .map((a) => a.review!.commentAuthor!)
+        : [],
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
     authors: opts?.authors?.map(serializeAuthor),

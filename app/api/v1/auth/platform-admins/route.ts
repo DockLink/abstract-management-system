@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { parseBody } from "@/lib/api/validate";
 import { badRequest, ok, serverError } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/supabase";
@@ -19,6 +20,8 @@ export async function GET(request: Request) {
     const admins = await listPlatformAdmins();
     return ok(admins);
   } catch (error) {
+    // Let Next.js prerender-bailout signals propagate (cacheComponents).
+    unstable_rethrow(error);
     console.error("GET /auth/platform-admins", error);
     return serverError(
       error instanceof Error ? error.message : "Internal server error",

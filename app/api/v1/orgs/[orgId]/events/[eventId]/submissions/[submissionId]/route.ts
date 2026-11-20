@@ -20,6 +20,10 @@ async function getSubmission(orgId: string, eventId: string, submissionId: strin
     include: {
       authors: { orderBy: { sortOrder: "asc" } },
       affiliations: { orderBy: { number: "asc" } },
+      reviewAssignments: {
+        where: { status: "COMPLETED" },
+        include: { review: { select: { commentAuthor: true, isDraft: true } } },
+      },
     },
   });
 }
@@ -69,17 +73,23 @@ export async function PATCH(request: Request, context: Ctx) {
       return unprocessable("Submission cannot be edited in its current status.");
     }
 
-    // If not admin, check the submission window is open
+    // If not admin, check the submission window is open or active personal extension / revision deadline
     if (!isAdmin) {
-      const event = await prisma.event.findFirst({ where: { id: eventId, orgId, deletedAt: null } });
-      if (event) {
-        const portal = derivePortalState(event);
-        // Check for personal deadline extension
-        const extension = await prisma.deadlineExtension.findFirst({
-          where: { eventId, submitterUserId: auth.ctx.user.id, extendsUntil: { gt: new Date() } },
-        });
-        if (!portal.canSubmit && !extension) {
-          return unprocessable("The submission deadline has passed.");
+      const isRevision = submission.status === "REVISIONS_REQUESTED";
+      const hasValidRevisionDeadline =
+        isRevision && (!submission.revisionDueAt || new Date() <= submission.revisionDueAt);
+
+      if (!hasValidRevisionDeadline) {
+        const event = await prisma.event.findFirst({ where: { id: eventId, orgId, deletedAt: null } });
+        if (event) {
+          const portal = derivePortalState(event);
+          // Check for personal deadline extension
+          const extension = await prisma.deadlineExtension.findFirst({
+            where: { eventId, submitterUserId: auth.ctx.user.id, extendsUntil: { gt: new Date() } },
+          });
+          if (!portal.canSubmit && !extension) {
+            return unprocessable("The submission deadline has passed.");
+          }
         }
       }
     }

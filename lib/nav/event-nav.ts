@@ -15,6 +15,7 @@ import {
   CreditCard,
   FilePlus2,
   FileText,
+  Gavel,
   Globe,
   Inbox,
   LayoutDashboard,
@@ -143,6 +144,7 @@ export function navFor(role: ViewRole, p: EventPaths): NavGroup[] {
           items: [
             { id: "submissions", label: "Submissions", shortLabel: "Abstracts", href: `${p.admin}/submissions`, icon: Inbox, primary: true },
             { id: "reviews", label: "Reviews", href: `${p.admin}/reviews`, icon: ClipboardCheck, primary: true },
+            { id: "decisions", label: "Decisions", href: `${p.admin}/decisions`, icon: Gavel, primary: true },
           ],
         },
         {
@@ -178,6 +180,7 @@ export function navFor(role: ViewRole, p: EventPaths): NavGroup[] {
           items: [
             { id: "submissions", label: "Submissions", shortLabel: "Abstracts", href: `${p.admin}/submissions`, icon: Inbox, primary: true },
             { id: "reviews", label: "Reviews", href: `${p.admin}/reviews`, icon: ClipboardCheck, primary: true },
+            { id: "decisions", label: "Decisions", href: `${p.admin}/decisions`, icon: Gavel, primary: true },
           ],
         },
         { id: "event", label: "Event", items: [{ ...eventPage, primary: true }] },

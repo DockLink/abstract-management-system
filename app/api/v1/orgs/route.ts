@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { Prisma } from "@/app/generated/prisma/client";
 import { parseBody } from "@/lib/api/validate";
 import { conflict, ok, serverError } from "@/lib/api/response";
@@ -28,6 +29,8 @@ export async function GET(request: Request) {
 
     return ok(memberships.map((m) => serializeOrg(m.organisation)));
   } catch (error) {
+    // Let Next.js prerender-bailout signals propagate (cacheComponents).
+    unstable_rethrow(error);
     console.error("GET /orgs", error);
     return serverError();
   }

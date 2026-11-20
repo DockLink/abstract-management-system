@@ -76,7 +76,14 @@ export async function GET(request: Request, context: Ctx) {
     const [submissions, total] = await Promise.all([
       prisma.submission.findMany({
         where,
-        include: { authors: { orderBy: { sortOrder: "asc" } }, affiliations: { orderBy: { number: "asc" } } },
+        include: {
+          authors: { orderBy: { sortOrder: "asc" } },
+          affiliations: { orderBy: { number: "asc" } },
+          reviewAssignments: {
+            where: { status: "COMPLETED" },
+            include: { review: { select: { commentAuthor: true, isDraft: true } } },
+          },
+        },
         orderBy: { createdAt: "desc" },
         skip,
         take: limit,
