@@ -43,14 +43,14 @@ import {
 import type { FormFieldDto, FormFieldType, SubmissionTypeDto } from "@/lib/types/api";
 
 const FIELD_TYPES: Array<{ value: FormFieldType; label: string; icon: React.ElementType }> = [
-  { value: "TEXT", label: "Short Text", icon: FileText },
-  { value: "LONG_TEXT", label: "Long Text / Textarea", icon: FileText },
-  { value: "DROPDOWN", label: "Dropdown Select", icon: List },
-  { value: "RADIO", label: "Single Choice (Radio)", icon: CheckSquare },
-  { value: "CHECKBOX", label: "Multiple Choice (Checkbox)", icon: CheckSquare },
+  { value: "TEXT", label: "Short text", icon: FileText },
+  { value: "LONG_TEXT", label: "Long text", icon: FileText },
+  { value: "DROPDOWN", label: "Dropdown", icon: List },
+  { value: "RADIO", label: "Single choice (radio)", icon: CheckSquare },
+  { value: "CHECKBOX", label: "Multiple choice (checkboxes)", icon: CheckSquare },
   { value: "NUMBER", label: "Number", icon: Hash },
   { value: "DATE", label: "Date", icon: Calendar },
-  { value: "FILE_UPLOAD", label: "File Upload", icon: UploadCloud },
+  { value: "FILE_UPLOAD", label: "File upload", icon: UploadCloud },
 ];
 
 export function FormBuilderDialog({

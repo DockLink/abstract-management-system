@@ -136,7 +136,7 @@ export function SubmissionTypesPage({
     <div>
       <PageHeader
         title="Submission types"
-        description="Each type has its own form and word limit (EVT-05). Authors pick one when they submit."
+        description="Each type has its own form and word limit. Authors pick one when they submit."
       />
 
       {loading ? (
@@ -215,7 +215,7 @@ export function SubmissionTypesPage({
           Presentation types
         </h2>
         <p className="mt-1 max-w-[65ch] text-base text-muted-foreground">
-          The formats you can accept abstracts for (EVT-06). They&apos;re fixed for now and used when decisions are made.
+          The formats you can accept abstracts for. They&apos;re fixed for now and used when decisions are made.
         </p>
         {activePresentation.length === 0 ? (
           <p className="mt-4 text-base text-warning-foreground">None active for this event.</p>

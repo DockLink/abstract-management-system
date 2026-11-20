@@ -82,6 +82,12 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
+      <a
+        href="#main-content"
+        className="sr-only z-50 rounded-md bg-background px-4 py-3 text-base font-medium text-foreground shadow-overlay focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:outline-2 focus:outline-ring"
+      >
+        Skip to main content
+      </a>
       {/* Mobile top bar */}
       <div className="sticky top-0 z-30 flex min-h-14 items-center gap-1 border-b border-border bg-background px-1.5 lg:hidden">
         {sidebar ? (
@@ -158,7 +164,9 @@ export function AppShell({
 
           <main
             id="main-content"
+            tabIndex={-1}
             className={cn(
+              "outline-none",
               "w-full flex-1 px-4 py-6 md:px-6 md:py-8",
               bottomBar && "pb-28 lg:pb-8",
               contentClassName,

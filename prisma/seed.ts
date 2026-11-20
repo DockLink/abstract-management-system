@@ -663,7 +663,7 @@ async function main() {
     }
 
     // Submission 3: ACCEPTED (AAS26-0002) (for testing "Register now" callout and DEC flow)
-    let sub3 = await prisma.submission.findFirst({
+    const sub3 = await prisma.submission.findFirst({
       where: { eventId: event.id, refNo: "AAS26-0002" },
     });
     if (!sub3) {

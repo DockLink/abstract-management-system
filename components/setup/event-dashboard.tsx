@@ -3,13 +3,20 @@
 import { Suspense, use, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { BarChart3, ExternalLink, Inbox } from "lucide-react";
-import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import dynamic from "next/dynamic";
 import { KeyDates } from "@/components/event-page/key-dates";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCardsSkeleton, TableSkeleton } from "@/components/shared/skeletons";
 import { StatCard } from "@/components/shared/stat-card";
+
+// recharts is ~100 kB gzipped; load it after the page shell. The wrapper
+// already reserves the chart height, so nothing shifts when it arrives.
+const StatusBarChart = dynamic(() => import("./status-bar-chart"), {
+  ssr: false,
+  loading: () => <div className="h-full animate-pulse rounded-md bg-muted/60" />,
+});
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SetupChecklist, buildSetupSteps } from "@/components/setup/setup-checklist";
 import { Button } from "@/components/ui/button";
@@ -71,27 +78,7 @@ function BarList({
           ))}
         </ul>
         <div style={{ height: data.length * 44 }} aria-hidden>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 36, bottom: 0, left: 0 }} barCategoryGap={12}>
-              <XAxis type="number" hide allowDecimals={false} domain={[0, "dataMax"]} />
-              <YAxis type="category" dataKey="label" hide />
-              <Tooltip
-                cursor={{ fill: "var(--muted)" }}
-                formatter={(v) => [v ?? 0, "Abstracts"]}
-                contentStyle={{
-                  background: "var(--popover)",
-                  color: "var(--popover-foreground)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  fontSize: 14,
-                }}
-                labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
-              />
-              <Bar dataKey="count" fill="var(--brand-ink)" radius={[0, 4, 4, 0]} minPointSize={2} isAnimationActive={false}>
-                <LabelList dataKey="count" position="right" style={{ fill: "var(--foreground)", fontSize: 14, fontWeight: 600 }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <StatusBarChart data={data} />
         </div>
       </div>
       <figcaption className="sr-only">{caption}</figcaption>
@@ -290,7 +277,7 @@ export function EventDashboard({
   const base = `/org/${orgSlug}/events/${eventSlug}`;
   return (
     <div>
-      <PageHeader title="Dashboard" description="Submissions, reviews and registrations at a glance (EVT-11)." />
+      <PageHeader title="Dashboard" description="Submissions, reviews and registrations at a glance." />
       {request ? (
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardBody

@@ -59,12 +59,13 @@ export function EventSwitcher({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={collapsed ? `Switch event (current: ${current.name})` : "Switch event"}
+          aria-label={collapsed ? `Switch event (current: ${current.name})` : undefined}
           className={cn(
             "flex min-h-control w-full items-center gap-3 rounded-md p-1.5 text-left hover:bg-sidebar-accent/60",
             collapsed && "justify-center",
           )}
         >
+          {collapsed ? null : <span className="sr-only">Switch event: </span>}
           {body}
           {collapsed ? null : <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
         </button>
@@ -141,10 +142,11 @@ export function ViewAsSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" aria-label={`Viewing as ${VIEW_ROLE_LABEL[current]}. Change view`}>
-          <Eye data-icon="inline-start" />
-          <span className="text-muted-foreground">Viewing as</span>
+        <Button variant="outline" size="sm">
+          <Eye data-icon="inline-start" aria-hidden />
+          <span className="text-muted-foreground">Viewing as</span>{" "}
           <span className="font-semibold">{VIEW_ROLE_LABEL[current]}</span>
+          <span className="sr-only">. Change view</span>
           <ChevronsUpDown className="text-muted-foreground" aria-hidden />
         </Button>
       </DropdownMenuTrigger>

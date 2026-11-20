@@ -134,13 +134,13 @@ export function ReviewerCertificateModal({
         ) : data ? (
           <div className="flex-1 overflow-auto border rounded-xl bg-muted  p-4 my-2">
             <div
-              className="bg-card text-foreground border-4 border-double border-indigo-900 p-8 shadow-sm rounded-lg max-w-2xl mx-auto text-center"
-              style={{ fontFamily: "Georgia, serif" }}
+              data-paper
+              className="mx-auto max-w-2xl rounded-lg border-4 border-double border-foreground/70 bg-card p-8 text-center font-heading text-foreground shadow-sm"
             >
               <div className="text-xs tracking-widest text-muted-foreground uppercase font-sans font-semibold mb-2">
                 {data.organisation.name}
               </div>
-              <h2 className="text-2xl font-bold text-indigo-950 uppercase tracking-wide mb-3">
+              <h2 className="mb-3 text-2xl font-semibold tracking-wide uppercase">
                 Certificate of Appreciation
               </h2>
               <p className="text-sm italic text-muted-foreground mb-4">
@@ -157,12 +157,12 @@ export function ReviewerCertificateModal({
               </p>
               <div className="flex justify-between items-center text-xs text-muted-foreground border-t pt-4 mt-6">
                 <div>
-                  <div className="w-24 border-b border-slate-400 mb-1 mx-auto" />
+                  <div className="mx-auto mb-1 w-24 border-b border-muted-foreground" />
                   Academic Chair
                 </div>
                 <div>Issued: {data.stats.issueDate}</div>
                 <div>
-                  <div className="w-24 border-b border-slate-400 mb-1 mx-auto" />
+                  <div className="mx-auto mb-1 w-24 border-b border-muted-foreground" />
                   Organising Committee
                 </div>
               </div>

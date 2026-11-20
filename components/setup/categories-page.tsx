@@ -266,7 +266,7 @@ export function CategoriesPage({
     <div>
       <PageHeader
         title="Tracks and chairs"
-        description="The categories authors choose from, each with a track chair who assigns reviewers (EVT-04)."
+        description="The categories authors choose from, each with a track chair who assigns reviewers."
         actions={
           <Button type="button" onClick={openCreate}>
             <Plus data-icon="inline-start" />

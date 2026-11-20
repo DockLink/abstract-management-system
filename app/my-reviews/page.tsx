@@ -18,7 +18,7 @@ export default async function MyReviewsRoute() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <main id="main-content" className="min-h-dvh bg-surface">
       <MyReviewsPage />
     </main>
   );

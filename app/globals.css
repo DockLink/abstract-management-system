@@ -45,7 +45,9 @@
 
 /* ─── 2. Semantic tokens — light ────────────────────────────────────────── */
 
-:root {
+:root,
+/* Print previews (certificates, abstract book) stay light in dark mode. */
+[data-paper] {
   /* Page & surfaces */
   --background: #ffffff; /* cards, inputs, sheets */
   --surface: var(--ink-50); /* page canvas ("paper") */
@@ -148,6 +150,11 @@
   --destructive: var(--danger);
   --destructive-tint: var(--danger-tint);
   --destructive-foreground: var(--danger-solid-foreground);
+}
+
+[data-paper] {
+  color-scheme: light;
+  color: var(--foreground);
 }
 
 /* ─── 2b. Semantic tokens — dark ────────────────────────────────────────── */

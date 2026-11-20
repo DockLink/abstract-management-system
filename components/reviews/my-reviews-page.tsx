@@ -2,23 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ChevronRight, ClipboardCheck } from "lucide-react";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { CardListSkeleton } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api/client";
-import {
-  ClipboardCheck,
-  Clock,
-  ChevronRight,
-  Loader2,
-} from "lucide-react";
+import { formatLongDate } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 
 interface ReviewEventItem {
   roleId: string;
@@ -49,157 +41,81 @@ interface ReviewEventItem {
 export function MyReviewsPage() {
   const [events, setEvents] = useState<ReviewEventItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let live = true;
     apiFetch<{ events: ReviewEventItem[] }>("/api/v1/me/reviews")
       .then((res) => {
+        if (!live) return;
         if (res.ok) {
           setEvents(res.data.events);
+          setError(null);
         } else {
-          toast.error(res.error.message || "Failed to load review events");
+          setError(res.error.message || "Your review events couldn't be loaded.");
         }
       })
-      .catch((err) => {
-        console.error(err);
-        toast.error("Error loading reviews");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading your reviewer portal...</p>
-      </div>
-    );
-  }
+      .catch(() => live && setError("Your review events couldn't be loaded."))
+      .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [attempt]);
 
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 space-y-8">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Badge variant="outline" className="text-xs bg-info-tint text-info-foreground  ">
-            Peer Reviewer
-          </Badge>
-        </div>
-        <h1 className="text-3xl font-semibold text-foreground  tracking-tight">
-          My Review Portals
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Conferences and academic events where you are registered as a peer reviewer.
-        </p>
-      </div>
-
-      {events.length === 0 ? (
-        <Card className="border-dashed p-12 text-center text-muted-foreground">
-          <ClipboardCheck className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <h3 className="font-bold text-base text-foreground ">
-            No Reviewer Assignments
-          </h3>
-          <p className="text-xs mt-1 max-w-sm mx-auto">
-            You are not currently assigned to review abstracts for any conference. Once invited by an
-            academic committee, your review portals will appear here.
-          </p>
-        </Card>
+    <div className="mx-auto max-w-5xl px-gutter py-6 md:py-10">
+      <PageHeader title="Your reviews" description="Events where you review abstracts." />
+      {loading ? (
+        <CardListSkeleton count={2} label="Loading your review events…" />
+      ) : error ? (
+        <ErrorState
+          title="Your review events didn't load"
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            setAttempt((a) => a + 1);
+          }}
+        />
+      ) : events.length === 0 ? (
+        <EmptyState
+          icon={ClipboardCheck}
+          title="You're not reviewing for any event yet"
+          description="When a committee invites you to review, the event appears here."
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ul className="grid gap-4 md:grid-cols-2">
           {events.map((evt) => {
-            const orgSlug = evt.organisation.slug;
-            const eventSlug = evt.eventSlug;
-            const reviewUrl = `/${orgSlug}/${eventSlug}/reviews`;
-
+            const href = `/${evt.organisation.slug}/${evt.eventSlug}/reviews`;
+            const outstanding = evt.counts.pending + evt.counts.inProgress;
             return (
-              <Card
-                key={evt.roleId}
-                className="border shadow-xs hover:border-border  transition-all bg-card  flex flex-col justify-between"
-              >
-                <CardHeader className="p-5 pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-semibold  text-muted-foreground block">
-                        {evt.organisation.name}
-                      </span>
-                      <CardTitle className="text-lg font-bold text-foreground  mt-0.5">
-                        {evt.eventName}
-                      </CardTitle>
-                    </div>
-                    {evt.hasAgreedToConfidentiality ? (
-                      <Badge className="bg-success hover:bg-success text-xs">
-                        Active Reviewer
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs text-warning-foreground border-warning/30">
-                        Pending Sign-off
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-5 pt-0 space-y-3">
-                  {/* Deadline */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                    <Clock className="h-3.5 w-3.5 text-warning-foreground" />
-                    <span>
-                      {evt.daysRemaining !== null ? (
-                        evt.isExpired ? (
-                          <strong className="text-danger-foreground">Deadline Expired</strong>
-                        ) : (
-                          <>
-                            <strong>{evt.daysRemaining} days left</strong> until review deadline
-                          </>
-                        )
-                      ) : (
-                        "No deadline set"
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Counts pill row */}
-                  <div className="grid grid-cols-4 gap-2 pt-2 border-t text-center text-xs">
-                    <div className="p-2 rounded-lg bg-muted ">
-                      <div className="font-bold text-foreground ">
-                        {evt.counts.total}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Assigned</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-warning-tint ">
-                      <div className="font-bold text-warning-foreground ">
-                        {evt.counts.inProgress}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Draft</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-success-tint ">
-                      <div className="font-bold text-success-foreground ">
-                        {evt.counts.completed}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Done</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-muted ">
-                      <div className="font-bold text-foreground ">
-                        {evt.counts.pending}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Pending</div>
-                    </div>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="p-5 pt-0 border-t flex justify-end">
-                  <Link href={reviewUrl} className="w-full">
-                    <Button className="w-full bg-primary text-primary-foreground font-semibold">
-                      Open Review Portal
-                      <ChevronRight className="h-4 w-4 ml-1.5" />
-                    </Button>
-                  </Link>
-                </CardFooter>
-              </Card>
+              <li key={evt.roleId} className="flex flex-col rounded-lg border border-border bg-card p-4 md:p-5">
+                <p className="text-sm text-muted-foreground">{evt.organisation.name}</p>
+                <h2 className="mt-0.5 font-heading text-xl leading-snug font-semibold">{evt.eventName}</h2>
+                <p className="mt-2 text-base">
+                  {evt.counts.completed} of {evt.counts.total - evt.counts.conflict} done
+                  {outstanding ? <span className="text-muted-foreground"> · {outstanding} to do</span> : null}
+                </p>
+                <p className={cn("mt-1 text-sm", evt.isExpired ? "text-danger-foreground" : "text-muted-foreground")}>
+                  {!evt.hasAgreedToConfidentiality
+                    ? "Agree to the confidentiality terms to start."
+                    : evt.reviewDeadlineAt
+                      ? `${evt.isExpired ? "Closed" : "Due"} ${formatLongDate(evt.reviewDeadlineAt)}${evt.daysRemaining !== null && !evt.isExpired ? ` · ${evt.daysRemaining} days left` : ""}`
+                      : "No review deadline set"}
+                </p>
+                <div className="mt-4 flex flex-1 items-end">
+                  <Button asChild className="w-full">
+                    <Link href={href}>
+                      {!evt.hasAgreedToConfidentiality ? "Review the terms" : outstanding ? "Open reviews" : "View reviews"}
+                      <ChevronRight data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );
 }
-

@@ -89,7 +89,7 @@ export function EligibilityPage({
     <div>
       <PageHeader
         title="Eligibility"
-        description="Checked automatically when an author submits (EVT-07)."
+        description="Checked automatically when an author submits."
       />
 
       {loading ? (

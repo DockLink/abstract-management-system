@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck, Loader2, LogIn, LogOut, UserRound } from "lucide-react";
+import { ClipboardCheck, Loader2, LogIn, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
+import { useTheme } from "next-themes";
 import { toast } from "@/components/shared/toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -56,6 +59,7 @@ export function UserMenu({
   compact?: boolean;
 }) {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -97,8 +101,9 @@ export function UserMenu({
           <Button
             variant="ghost"
             className={compact ? "size-control p-0" : "h-control gap-2 px-2"}
-            aria-label={`Account menu for ${name}`}
           >
+            {/* Name = "Account menu, <initials> <name>": keeps visible text inside the accessible name (WCAG 2.5.3). */}
+            <span className="sr-only">Account menu, </span>
             <Avatar className="size-8">
               <AvatarFallback className="bg-primary-tint text-xs font-semibold text-brand-ink">
                 {initials(user)}
@@ -107,6 +112,7 @@ export function UserMenu({
             {compact ? null : (
               <span className="hidden max-w-[11rem] truncate text-sm font-medium xl:inline">{name}</span>
             )}
+            <span className="sr-only xl:hidden"> {name}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
@@ -127,6 +133,22 @@ export function UserMenu({
               All my review events
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-sm font-normal text-muted-foreground">Appearance</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={setTheme}>
+            <DropdownMenuRadioItem value="light" onSelect={(e) => e.preventDefault()}>
+              <Sun aria-hidden />
+              Light
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark" onSelect={(e) => e.preventDefault()}>
+              <Moon aria-hidden />
+              Dark
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system" onSelect={(e) => e.preventDefault()}>
+              <Monitor aria-hidden />
+              Same as device
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={signingOut} onSelect={() => void signOut()}>
             {signingOut ? <Loader2 className="animate-spin" /> : <LogOut />}

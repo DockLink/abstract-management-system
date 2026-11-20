@@ -29,6 +29,7 @@ type TestUser = {
 };
 
 const USERS: TestUser[] = [
+  { email: "eventadmin@example.com", fullName: "Ms. Sanduni Ratnayake", roles: [EventRoleType.EVENT_ADMIN] },
   { email: "chair@example.com", fullName: "Dr. Chaminda Fernando", roles: [EventRoleType.TRACK_CHAIR], categories: 1 },
   { email: "reviewer@example.com", fullName: "Dr. Nirmala Wijesinghe", roles: [EventRoleType.REVIEWER], categories: 2 },
   { email: "finance@example.com", fullName: "Ms. Dilani Gunasekara", roles: [EventRoleType.FINANCE_OFFICER] },

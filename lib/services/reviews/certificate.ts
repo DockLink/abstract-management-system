@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { formatLongDate } from "@/lib/dates";
 import { EventRoleType, ReviewAssignmentStatus } from "@/app/generated/prisma/client";
 
 export interface ReviewerCertificateData {
@@ -63,11 +64,8 @@ export async function generateReviewerCertificate(
   }
 
   const certificateId = `CERT-REV-${event.slug.toUpperCase()}-${reviewerId.slice(-6).toUpperCase()}`;
-  const issueDate = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  // "19 November 2026", Asia/Colombo (GEN-09)
+  const issueDate = formatLongDate(new Date());
 
   const reviewerName = role.user.fullName || role.user.email;
   const eventName = event.edition ? `${event.name} (${event.edition})` : event.name;

@@ -7,10 +7,16 @@ import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { FileUpload } from "@/components/shared/file-upload";
 import { FormSection } from "@/components/shared/form-section";
 import { toast } from "@/components/shared/toast";
-import { GuidelinesEditor } from "@/components/setup/guidelines-editor";
+import dynamic from "next/dynamic";
+
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api/client";
 import type { EventDto } from "@/lib/types/api";
+
+const GuidelinesEditor = dynamic(
+  () => import("@/components/setup/guidelines-editor").then((m) => m.GuidelinesEditor),
+  { ssr: false, loading: () => <div className="min-h-[240px] animate-pulse rounded-lg border border-input bg-muted/40" /> },
+);
 
 export function PublicPageForm({
   orgId,

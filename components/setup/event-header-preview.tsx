@@ -40,6 +40,7 @@ export function EventHeaderPreview({
             src={bannerUrl}
             alt=""
             fill
+            sizes="(min-width: 1024px) 40rem, 100vw"
             className="object-cover"
             unoptimized
           />
@@ -55,6 +56,7 @@ export function EventHeaderPreview({
                 src={logoUrl}
                 alt=""
                 fill
+                sizes="56px"
                 className="object-contain p-1"
                 unoptimized
               />

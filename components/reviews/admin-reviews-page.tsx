@@ -728,7 +728,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 icon={Users}
                 title="No reviewers yet"
                 description="Invite reviewers from the Reviewers tab, then assign abstracts."
-                action={<Button variant="outline" onClick={() => setActiveTab("reviewers")}>Go to Reviewers</Button>}
+                action={<Button variant="outline" onClick={() => setActiveTab("reviewers")}>Go to reviewers</Button>}
               />
             ) : (
               <ul className="mt-4 grid gap-3 md:grid-cols-2">
@@ -809,7 +809,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold">Reviewer Pool</h2>
+              <h2 className="text-lg font-bold">Reviewer pool</h2>
               <p className="text-xs text-muted-foreground">
                 Manage reviewers invited to this conference, their expertise categories, and max capacities.
               </p>
@@ -820,7 +820,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               className="gap-1.5 bg-primary text-primary-foreground font-semibold"
             >
               <Plus className="h-4 w-4" />
-              Invite Reviewer
+              Invite reviewer
             </Button>
           </div>
 
@@ -831,9 +831,9 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                   <tr className="border-b bg-muted  text-muted-foreground font-semibold">
                     <th className="p-3 pl-5">Reviewer</th>
                     <th className="p-3">Institution</th>
-                    <th className="p-3">Expertise Categories</th>
-                    <th className="p-3">Max Load</th>
-                    <th className="p-3">Invitation & Confidentiality</th>
+                    <th className="p-3">Expertise categories</th>
+                    <th className="p-3">Max load</th>
+                    <th className="p-3">Invitation & confidentiality</th>
                     <th className="p-3 pr-5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -878,14 +878,14 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="text-xs text-warning-foreground">
-                                Pending Invite
+                                Pending invite
                               </Badge>
                             )}
                           </div>
                           {r.confidentialityAgreedAt ? (
                             <span className="text-xs text-success-foreground flex items-center gap-1 font-medium">
                               <ShieldCheck className="h-3 w-3" />
-                              Confidentiality Signed
+                              Confidentiality signed
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground italic">
@@ -903,7 +903,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                               setCertModalOpen(true);
                             }}
                             className="h-7 text-xs text-warning-foreground hover:text-warning-foreground hover:bg-warning-tint"
-                            title="View Certificate of Appreciation"
+                            title="View certificate of appreciation"
                           >
                             <Award className="h-3.5 w-3.5 mr-1" />
                             Certificate
@@ -932,7 +932,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold">Scoring Rubric Builder</h2>
+              <h2 className="text-lg font-bold">Scoring rubric builder</h2>
               <p className="text-xs text-muted-foreground">
                 Define the criteria, scales (e.g. 1 to 5 or 1 to 10), and weights used by reviewers during evaluation.
               </p>
@@ -951,7 +951,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               className="gap-1.5 bg-primary text-primary-foreground font-semibold"
             >
               <Plus className="h-4 w-4" />
-              Add Rubric Criterion
+              Add rubric criterion
             </Button>
           </div>
 
@@ -1042,7 +1042,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold">Review Assignments</h2>
+              <h2 className="text-lg font-bold">Review assignments</h2>
               <p className="text-xs text-muted-foreground">
                 Assign reviewers manually, in bulk by category, or with the automatic load-balancing engine.
               </p>
@@ -1055,7 +1055,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 className="gap-1.5"
               >
                 <Plus className="h-4 w-4" />
-                Manual Assign
+                Manual assign
               </Button>
               <Button
                 variant="outline"
@@ -1064,7 +1064,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 className="gap-1.5"
               >
                 <Users className="h-4 w-4" />
-                Bulk by Category
+                Bulk by category
               </Button>
               <Button
                 size="sm"
@@ -1072,7 +1072,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 className="gap-1.5 bg-primary text-primary-foreground font-semibold"
               >
                 <Shuffle className="h-4 w-4" />
-                Auto-Assign Engine
+                Auto-assign engine
               </Button>
             </div>
           </div>
@@ -1086,7 +1086,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                     <th className="p-3">Category</th>
                     <th className="p-3">Reviewer</th>
                     <th className="p-3">Status</th>
-                    <th className="p-3">Score & Outcome</th>
+                    <th className="p-3">Score & outcome</th>
                     <th className="p-3 pr-5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1128,7 +1128,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                             </Badge>
                           ) : a.status === "IN_PROGRESS" ? (
                             <Badge variant="secondary" className="bg-warning-tint text-warning-foreground text-xs">
-                              In Progress
+                              In progress
                             </Badge>
                           ) : a.status === "CONFLICT" ? (
                             <Badge variant="destructive" className="text-xs">
@@ -1321,14 +1321,14 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite Peer Reviewer</DialogTitle>
+            <DialogTitle>Invite peer reviewer</DialogTitle>
             <DialogDescription>
               Invite a senior consultant or reviewer by email, record their expertise tracks, and set max workload capacity.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="rev-email">Reviewer Email *</Label>
+              <Label htmlFor="rev-email">Reviewer email *</Label>
               <Input
                 id="rev-email"
                 placeholder="reviewer@hospital.org"
@@ -1337,7 +1337,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="rev-name">Full Name (optional)</Label>
+              <Label htmlFor="rev-name">Full name (optional)</Label>
               <Input
                 id="rev-name"
                 placeholder="Prof. / Dr. ..."
@@ -1346,7 +1346,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Expertise Categories</Label>
+              <Label>Expertise categories</Label>
               <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 border rounded-lg">
                 {categories.map((cat) => (
                   <label key={cat.id} className="flex items-center gap-2 text-xs cursor-pointer">
@@ -1371,7 +1371,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="rev-max">Max Capacity Load</Label>
+              <Label htmlFor="rev-max">Max capacity load</Label>
               <Input
                 id="rev-max"
                 type="number"
@@ -1388,7 +1388,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </Button>
             <Button onClick={handleInviteReviewer} disabled={inviting}>
               {inviting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Send Invitation
+              Send invitation
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1399,7 +1399,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingCriterionId ? "Edit Scoring Criterion" : "Add Rubric Scoring Criterion"}
+              {editingCriterionId ? "Edit scoring criterion" : "Add rubric scoring criterion"}
             </DialogTitle>
             <DialogDescription>
               Define scoring criteria, numeric scale bounds, and formula weight.
@@ -1407,7 +1407,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="crit-name">Criterion Name *</Label>
+              <Label htmlFor="crit-name">Criterion name *</Label>
               <Input
                 id="crit-name"
                 placeholder="e.g. Scientific Rigour, Originality, Clarity"
@@ -1427,7 +1427,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="crit-min">Min Scale</Label>
+                <Label htmlFor="crit-min">Min scale</Label>
                 <Input
                   id="crit-min"
                   type="number"
@@ -1436,7 +1436,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="crit-max">Max Scale</Label>
+                <Label htmlFor="crit-max">Max scale</Label>
                 <Input
                   id="crit-max"
                   type="number"
@@ -1466,7 +1466,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </Button>
             <Button onClick={handleSaveCriterion} disabled={savingCriterion}>
               {savingCriterion && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Criterion
+              Save criterion
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1478,7 +1478,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Shuffle className="h-5 w-5 text-primary" />
-              Automated Reviewer Assignment
+              Automated reviewer assignment
             </DialogTitle>
             <DialogDescription>
               Automatically assign peer reviewers to submitted abstracts balancing reviewer workload, matching category expertise, and avoiding institutional conflicts.
@@ -1486,7 +1486,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
           </DialogHeader>
           <div className="space-y-4 py-2 text-sm">
             <div className="space-y-1.5">
-              <Label htmlFor="auto-count">Reviewers per Abstract</Label>
+              <Label htmlFor="auto-count">Reviewers per abstract</Label>
               <Input
                 id="auto-count"
                 type="number"
@@ -1499,14 +1499,14 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="auto-cat">Target Category (optional)</Label>
+              <Label htmlFor="auto-cat">Target category (optional)</Label>
               <select
                 id="auto-cat"
                 value={autoCategory}
                 onChange={(e) => setAutoCategory(e.target.value)}
                 className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
-                <option value="">All Categories</option>
+                <option value="">All categories</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -1551,7 +1551,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </Button>
             <Button onClick={handleRunAutoAssign} disabled={autoAssigning}>
               {autoAssigning && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Run Auto-Assign
+              Run auto-assign
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1561,7 +1561,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       <Dialog open={bulkCategoryModalOpen} onOpenChange={setBulkCategoryModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Bulk Assign by Category</DialogTitle>
+            <DialogTitle>Bulk assign by category</DialogTitle>
             <DialogDescription>
               Assign selected reviewers to all submissions currently submitted in a track.
             </DialogDescription>
@@ -1574,7 +1574,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 onChange={(e) => setBulkCategorySelected(e.target.value)}
                 className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
-                <option value="">Select Category...</option>
+                <option value="">Select category...</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -1584,7 +1584,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </div>
 
             <div className="space-y-1.5">
-              <Label>Select Reviewers *</Label>
+              <Label>Select reviewers *</Label>
               <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1.5 text-xs">
                 {reviewers.map((r) => (
                   <label key={r.userId} className="flex items-center gap-2 cursor-pointer">
@@ -1618,7 +1618,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </Button>
             <Button onClick={handleBulkCategoryAssign} disabled={bulkAssigning}>
               {bulkAssigning && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Assign Reviewers
+              Assign reviewers
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1628,20 +1628,20 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       <Dialog open={manualAssignModalOpen} onOpenChange={setManualAssignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Manual Reviewer Assignment</DialogTitle>
+            <DialogTitle>Manual reviewer assignment</DialogTitle>
             <DialogDescription>
               Assign or add a reviewer to a specific submission.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label>Select Submission *</Label>
+              <Label>Select submission *</Label>
               <select
                 value={manualSubmissionId}
                 onChange={(e) => setManualSubmissionId(e.target.value)}
                 className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
-                <option value="">Select Submission...</option>
+                <option value="">Select submission...</option>
                 {submissionsList.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.refNo ? `[${s.refNo}] ` : ""}
@@ -1652,13 +1652,13 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </div>
 
             <div className="space-y-1.5">
-              <Label>Select Reviewer *</Label>
+              <Label>Select reviewer *</Label>
               <select
                 value={manualReviewerId}
                 onChange={(e) => setManualReviewerId(e.target.value)}
                 className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
-                <option value="">Select Reviewer...</option>
+                <option value="">Select reviewer...</option>
                 {reviewers.map((r) => (
                   <option key={r.userId} value={r.userId}>
                     {r.fullName || r.email} ({r.assignedCount}/{r.maxLoad} load)
@@ -1677,7 +1677,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             </Button>
             <Button onClick={handleManualAssign} disabled={manualAssigning}>
               {manualAssigning && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm Assignment
+              Confirm assignment
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1687,20 +1687,20 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       <Dialog open={reassignModalOpen} onOpenChange={setReassignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reassign Reviewer</DialogTitle>
+            <DialogTitle>Reassign reviewer</DialogTitle>
             <DialogDescription>
               Transfer this assignment to a new reviewer. Any prior draft will be cleared.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label>New Reviewer *</Label>
+              <Label>New reviewer *</Label>
               <select
                 value={reassignNewReviewerId}
                 onChange={(e) => setReassignNewReviewerId(e.target.value)}
                 className="w-full h-9 text-xs border rounded-lg px-2 bg-card "
               >
-                <option value="">Select New Reviewer...</option>
+                <option value="">Select new reviewer...</option>
                 {reviewers.map((r) => (
                   <option key={r.userId} value={r.userId}>
                     {r.fullName || r.email} ({r.assignedCount}/{r.maxLoad} load)
@@ -1709,7 +1709,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Reason for Reassignment</Label>
+              <Label>Reason for reassignment</Label>
               <Input
                 placeholder="e.g. Conflict of interest, unresponsive reviewer..."
                 value={reassignReason}

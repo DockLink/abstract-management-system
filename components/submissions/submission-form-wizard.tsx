@@ -22,7 +22,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { AbstractSectionEditor } from "@/components/submissions/abstract-section-editor";
+import dynamic from "next/dynamic";
+
 import { AutosaveIndicator, type AutosaveState } from "@/components/shared/autosave-indicator";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FileUpload } from "@/components/shared/file-upload";
@@ -58,6 +59,13 @@ import type {
   SubmissionDto,
   SubmissionTypeDto,
 } from "@/lib/types/api";
+
+// TipTap is heavy; load it after the wizard renders. The placeholder matches
+// the editor's own pre-mount height so the step doesn't jump.
+const AbstractSectionEditor = dynamic(
+  () => import("@/components/submissions/abstract-section-editor").then((m) => m.AbstractSectionEditor),
+  { ssr: false, loading: () => <div className="min-h-44 animate-pulse rounded-md border border-input bg-muted/40" /> },
+);
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 

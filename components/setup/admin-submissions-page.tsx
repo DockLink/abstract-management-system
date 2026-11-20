@@ -9,10 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Select,
@@ -30,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { apiFetch } from "@/lib/api/client";
+import { formatLongDateTime } from "@/lib/dates";
 import { EventIcons } from "@/lib/events/icons";
 import {
   Search,
@@ -38,10 +35,6 @@ import {
   AlertTriangle,
   Download,
   CheckCircle2,
-  Clock,
-  Layers,
-  ShieldCheck,
-  Filter,
 } from "lucide-react";
 import type {
   CategoryDto,
@@ -215,18 +208,19 @@ export function AdminSubmissionsPage({
           onClick={scanDuplicates}
           className="gap-1.5 shrink-0"
         >
-          <AlertTriangle className="size-4 text-amber-600" />
-          Check Duplicate Titles
+          <AlertTriangle className="size-4 text-warning-foreground" aria-hidden />
+          Check duplicate titles
         </Button>
       </div>
 
       {/* Filter Toolbar */}
-      <Card className="border border-border bg-white shadow-sm p-4">
+      <Card className="p-4">
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               placeholder="Search title…"
+              aria-label="Search submissions by title"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8 text-sm"
@@ -234,15 +228,15 @@ export function AdminSubmissionsPage({
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Statuses" />
+            <SelectTrigger aria-label="Filter by status">
+              <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All Statuses</SelectItem>
+              <SelectItem value="ALL">All statuses</SelectItem>
               <SelectItem value="DRAFT">Draft</SelectItem>
               <SelectItem value="SUBMITTED">Submitted</SelectItem>
-              <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
-              <SelectItem value="REVISIONS_REQUESTED">Revisions Requested</SelectItem>
+              <SelectItem value="UNDER_REVIEW">Under review</SelectItem>
+              <SelectItem value="REVISIONS_REQUESTED">Revisions requested</SelectItem>
               <SelectItem value="ACCEPTED">Accepted</SelectItem>
               <SelectItem value="CONFIRMED">Confirmed</SelectItem>
               <SelectItem value="REJECTED">Rejected</SelectItem>
@@ -252,11 +246,11 @@ export function AdminSubmissionsPage({
           </Select>
 
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Categories" />
+            <SelectTrigger aria-label="Filter by track">
+              <SelectValue placeholder="All tracks" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All Categories</SelectItem>
+              <SelectItem value="ALL">All tracks</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
@@ -266,11 +260,11 @@ export function AdminSubmissionsPage({
           </Select>
 
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Submission Types" />
+            <SelectTrigger aria-label="Filter by submission type">
+              <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All Types</SelectItem>
+              <SelectItem value="ALL">All types</SelectItem>
               {submissionTypes.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
@@ -293,15 +287,15 @@ export function AdminSubmissionsPage({
           description="No abstracts match your filter criteria."
         />
       ) : (
-        <div className="rounded-xl border border-border bg-white overflow-hidden shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-muted/40 border-b border-border text-xs font-semibold text-muted-foreground">
                 <tr>
-                  <th className="py-3 px-4">Ref No</th>
+                  <th className="py-3 px-4">Reference</th>
                   <th className="py-3 px-4">Title</th>
                   <th className="py-3 px-4">Presenter</th>
-                  <th className="py-3 px-4">Type & Category</th>
+                  <th className="py-3 px-4">Type & category</th>
                   <th className="py-3 px-4">Words</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -329,7 +323,7 @@ export function AdminSubmissionsPage({
                             <p className="font-semibold text-foreground">
                               {presenter.surname}, {presenter.initials}
                             </p>
-                            <p className="text-muted-foreground text-[11px]">{presenter.email}</p>
+                            <p className="text-xs text-muted-foreground">{presenter.email}</p>
                           </div>
                         ) : (
                           <span className="text-muted-foreground italic">None marked</span>
@@ -337,7 +331,7 @@ export function AdminSubmissionsPage({
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap text-xs">
                         <p className="font-medium text-foreground">{subType?.name || "General"}</p>
-                        <p className="text-muted-foreground text-[11px]">{cat?.name || "Uncategorized"}</p>
+                        <p className="text-xs text-muted-foreground">{cat?.name || "Uncategorized"}</p>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap text-xs font-mono">
                         {sub.wordCount}
@@ -353,21 +347,21 @@ export function AdminSubmissionsPage({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="size-8"
                             onClick={() => openVersions(sub)}
-                            title="Version History"
+                            title="Version history"
+                            aria-label={`Version history for ${sub.refNo ?? sub.title}`}
                           >
-                            <History className="size-4" />
+                            <History className="size-4" aria-hidden />
                           </Button>
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8 text-xs gap-1"
                             onClick={() => setInspectSub(sub)}
                           >
-                            <Eye className="size-3.5" />
+                            <Eye data-icon="inline-start" aria-hidden />
                             Inspect
+                            <span className="sr-only"> {sub.refNo ?? sub.title}</span>
                           </Button>
                         </div>
                       </td>
@@ -397,14 +391,14 @@ export function AdminSubmissionsPage({
                   }}
                   disabled={patchingId === inspectSub?.id}
                 >
-                  <SelectTrigger className="h-8 text-xs w-40">
+                  <SelectTrigger className="w-44" aria-label="Change status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="DRAFT">Draft</SelectItem>
                     <SelectItem value="SUBMITTED">Submitted</SelectItem>
-                    <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
-                    <SelectItem value="REVISIONS_REQUESTED">Revisions Requested</SelectItem>
+                    <SelectItem value="UNDER_REVIEW">Under review</SelectItem>
+                    <SelectItem value="REVISIONS_REQUESTED">Revisions requested</SelectItem>
                     <SelectItem value="ACCEPTED">Accepted</SelectItem>
                     <SelectItem value="CONFIRMED">Confirmed</SelectItem>
                     <SelectItem value="REJECTED">Rejected</SelectItem>
@@ -423,7 +417,7 @@ export function AdminSubmissionsPage({
             {/* Authors & Affiliations */}
             <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
               <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                Authors & Affiliations
+                Authors & affiliations
               </p>
               <p className="font-semibold text-foreground text-sm">
                 {inspectSub?.authors?.map((a, i) => (
@@ -456,7 +450,7 @@ export function AdminSubmissionsPage({
               </p>
               {inspectSub?.abstractBody &&
                 Object.entries(inspectSub.abstractBody).map(([key, html]) => (
-                  <div key={key} className="space-y-1 rounded-lg border border-border p-3.5 bg-white">
+                  <div key={key} className="space-y-1 rounded-lg border border-border bg-card p-3.5">
                     <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
                       {key}
                     </span>
@@ -489,7 +483,7 @@ export function AdminSubmissionsPage({
                     className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                   >
                     <Download className="size-3.5" />
-                    Download ERC Certificate (PDF)
+                    Download ERC certificate (PDF)
                   </a>
                 ) : null}
               </div>
@@ -553,15 +547,10 @@ export function AdminSubmissionsPage({
                   <div className="flex items-center justify-between font-medium">
                     <span className="font-semibold text-foreground">Version {ver.version}</span>
                     <span className="text-muted-foreground">
-                      {new Date(ver.createdAt).toLocaleString([], {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatLongDateTime(ver.createdAt)}
                     </span>
                   </div>
-                  <p className="text-muted-foreground text-[11px]">
+                  <p className="text-xs text-muted-foreground">
                     Captured by user ID: {ver.createdById}
                   </p>
                 </div>
@@ -582,11 +571,11 @@ export function AdminSubmissionsPage({
         <DialogContent className="max-w-2xl p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-5 text-amber-600" />
-              <span>Duplicate Title Check Scan</span>
+              <AlertTriangle className="size-5 text-warning-foreground" aria-hidden />
+              <span>Duplicate titles</span>
             </DialogTitle>
             <DialogDescription>
-              Scans all active event abstracts for near-identical titles using token and character-level similarity algorithms.
+              Abstracts in this event with near-identical titles. Check them before review starts.
             </DialogDescription>
           </DialogHeader>
 
@@ -594,33 +583,33 @@ export function AdminSubmissionsPage({
             {duplicateLoading ? (
               <p className="text-sm text-muted-foreground animate-pulse">Scanning event abstracts…</p>
             ) : duplicateClusters.length === 0 ? (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-800">
-                <CheckCircle2 className="size-8 mx-auto text-emerald-600 mb-2" />
-                <p className="font-semibold text-sm">No duplicate titles detected</p>
-                <p className="text-xs mt-1">All abstracts submitted to this event have distinct titles.</p>
+              <div className="rounded-lg border border-success/30 bg-success-tint p-6 text-center text-success-foreground">
+                <CheckCircle2 className="mx-auto mb-2 size-8" aria-hidden />
+                <p className="text-base font-semibold">No duplicate titles found</p>
+                <p className="mt-1 text-sm">Every abstract in this event has a distinct title.</p>
               </div>
             ) : (
               duplicateClusters.map((cluster, i) => (
                 <div
                   key={i}
-                  className="rounded-lg border border-amber-300 bg-amber-50/50 p-4 space-y-2 text-xs"
+                  className="space-y-2 rounded-lg border border-warning/30 bg-warning-tint p-4 text-sm"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-800">
-                      Match Similarity: {Math.round(cluster.similarity * 100)}%
+                    <span className="font-semibold text-warning-foreground">
+                      {Math.round(cluster.similarity * 100)}% similar
                     </span>
-                    <Badge variant="destructive" className="text-[10px] h-4">
-                      Potential Duplicate
+                    <Badge variant="destructive">
+                      Possible duplicate
                     </Badge>
                   </div>
                   <div className="space-y-1.5 pt-1">
-                    <div className="p-2 rounded bg-white border border-amber-200">
+                    <div className="rounded-md border border-warning/30 bg-card p-2">
                       <span className="font-mono font-bold text-muted-foreground mr-2">
                         {cluster.submissionA.refNo || "Draft"}
                       </span>
                       <span className="font-medium text-foreground">{cluster.submissionA.title}</span>
                     </div>
-                    <div className="p-2 rounded bg-white border border-amber-200">
+                    <div className="rounded-md border border-warning/30 bg-card p-2">
                       <span className="font-mono font-bold text-muted-foreground mr-2">
                         {cluster.submissionB.refNo || "Draft"}
                       </span>

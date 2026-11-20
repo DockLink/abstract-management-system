@@ -286,7 +286,7 @@ export function MembersPage({
     <div>
       <PageHeader
         title="Members"
-        description="Your college's member list (EVT-08). Used to check member-author eligibility and member pricing."
+        description="Your college's member list. Used to check member-author eligibility and member pricing."
         actions={
           <Button
             type="button"

@@ -280,7 +280,7 @@ export function SettingsPage({
             <div>
               <h2 id="ext-title" className="font-heading text-2xl font-semibold">Deadline extensions</h2>
               <p className="mt-1 max-w-[60ch] text-base text-muted-foreground">
-                Give one author more time without reopening the call for everyone (EVT-10).
+                Give one author more time without reopening the call for everyone.
               </p>
             </div>
             <Button type="button" onClick={() => { setExtErrors({}); setExtendOpen(true); }}>
@@ -300,7 +300,7 @@ export function SettingsPage({
 
         <FormSection
           title="Brand colour"
-          description="Buttons, links and highlights on the public page and portal use this colour (GEN-02)."
+          description="Buttons, links and highlights on the public page and portal use this colour."
           footer={
             <>
               <Button type="button" variant="outline" disabled={colorSaving || !savedColor} onClick={() => void saveBrandColor(null)}>
@@ -379,7 +379,7 @@ export function SettingsPage({
 
         <FormSection
           title="Clone for next year"
-          description="Start next year's event from this one's settings, forms, submission types and eligibility rules (EVT-09). Submissions and the reviewer pool aren't copied."
+          description="Start next year's event from this one's settings, forms, submission types and eligibility rules. Submissions and the reviewer pool aren't copied."
           footer={
             <Button type="button" variant="outline" onClick={openCloneDialog}>
               <CloneIcon data-icon="inline-start" />
