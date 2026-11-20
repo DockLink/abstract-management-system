@@ -2,118 +2,77 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { apiFetch } from "@/lib/api/client";
-import {
-  FileText,
-  Plus,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  History,
-  RotateCcw,
-  Sparkles,
-  ExternalLink,
   ChevronRight,
-  Eye,
+  FileText,
+  Gavel,
+  History,
+  Loader2,
+  Pencil,
+  Plus,
+  Ticket,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { DeadlineCountdown } from "@/components/shared/deadline-countdown";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { SidePanel } from "@/components/shared/side-panel";
+import { CardListSkeleton } from "@/components/shared/skeletons";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { toast } from "@/components/shared/toast";
+import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/lib/api/client";
+import { formatLongDate, formatLongDateTime } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 import type { SubmissionDto, SubmissionVersionDto } from "@/lib/types/api";
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; color: string; desc: string }
-> = {
-  DRAFT: {
-    label: "Draft",
-    color: "bg-slate-100 text-slate-700 border-slate-200",
-    desc: "Saved locally. Not visible to reviewers until submitted.",
-  },
-  SUBMITTED: {
-    label: "Submitted",
-    color: "bg-blue-50 text-blue-700 border-blue-200",
-    desc: "Abstract submitted. Awaiting review assignment.",
-  },
-  UNDER_REVIEW: {
-    label: "Under Review",
-    color: "bg-amber-50 text-amber-700 border-amber-200",
-    desc: "Currently undergoing blinded peer review.",
-  },
-  REVISIONS_REQUESTED: {
-    label: "Revisions Requested",
-    color: "bg-orange-50 text-orange-700 border-orange-200",
-    desc: "The reviewers have requested revisions. Please edit and re-submit.",
-  },
-  ACCEPTED: {
-    label: "Accepted",
-    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    desc: "Congratulations! Your abstract has been accepted for presentation.",
-  },
-  CONFIRMED: {
-    label: "Confirmed",
-    color: "bg-emerald-100 text-emerald-800 border-emerald-300",
-    desc: "Registration confirmed. Abstract included in conference programme.",
-  },
-  REJECTED: {
-    label: "Not Accepted",
-    color: "bg-rose-50 text-rose-700 border-rose-200",
-    desc: "Not selected for presentation at this session.",
-  },
-  WAITLISTED: {
-    label: "Waitlisted",
-    color: "bg-purple-50 text-purple-700 border-purple-200",
-    desc: "Placed on waitlist. You will be notified if a slot opens.",
-  },
-  WITHDRAWN: {
-    label: "Withdrawn",
-    color: "bg-gray-100 text-gray-500 border-gray-200",
-    desc: "Withdrawn from the conference by author.",
-  },
+/** What each status means for the author, in plain words. */
+const STATUS_COPY: Record<string, string> = {
+  DRAFT: "Saved as a draft. Reviewers can't see it until you submit.",
+  SUBMITTED: "Submitted. Waiting to be assigned to reviewers.",
+  UNDER_REVIEW: "Being reviewed. Reviewers don't see author names.",
+  REVISIONS_REQUESTED: "The committee asked for changes. Edit and submit again.",
+  ACCEPTED: "Accepted for presentation. The presenting author must register to confirm the slot.",
+  CONFIRMED: "Registration confirmed. This abstract is in the programme.",
+  REJECTED: "Not accepted for presentation at this meeting.",
+  WAITLISTED: "On the waiting list. You'll hear if a slot opens.",
+  WITHDRAWN: "Withdrawn by the author. It won't be reviewed.",
 };
+
+const DECIDED = new Set(["ACCEPTED", "CONFIRMED", "REJECTED", "WAITLISTED"]);
 
 export function SubmitterDashboard({
   orgId,
   eventId,
   orgSlug,
   eventSlug,
+  deadline = null,
+  canSubmit = true,
 }: {
   orgId: string;
   eventId: string;
   orgSlug: string;
   eventSlug: string;
+  /** Submission deadline (ISO), for the countdown on drafts. */
+  deadline?: string | null;
+  canSubmit?: boolean;
 }) {
-  const router = useRouter();
   const [submissions, setSubmissions] = useState<SubmissionDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Withdraw state
   const [withdrawTarget, setWithdrawTarget] = useState<SubmissionDto | null>(null);
   const [withdrawing, setWithdrawing] = useState(false);
 
-  // Versions dialog state (SUB-13)
   const [versionSub, setVersionSub] = useState<SubmissionDto | null>(null);
   const [versions, setVersions] = useState<SubmissionVersionDto[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
 
+  const [decisionSub, setDecisionSub] = useState<SubmissionDto | null>(null);
+
   const base = `/api/v1/orgs/${orgId}/events/${eventId}`;
+  const portal = `/${orgSlug}/${eventSlug}`;
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
@@ -121,8 +80,9 @@ export function SubmitterDashboard({
       const res = await apiFetch<{ data: SubmissionDto[] }>(`${base}/submissions`);
       if (res.ok) {
         setSubmissions(res.data.data);
+        setLoadError(null);
       } else {
-        toast.error(res.error.message || "Failed to load submissions");
+        setLoadError(res.error.message || "Your abstracts couldn't be loaded.");
       }
     } finally {
       setLoading(false);
@@ -133,25 +93,18 @@ export function SubmitterDashboard({
     void loadSubmissions();
   }, [loadSubmissions]);
 
-  // Load versions for SUB-13
   async function viewVersions(sub: SubmissionDto) {
     setVersionSub(sub);
     setVersionsLoading(true);
     try {
-      const res = await apiFetch<SubmissionVersionDto[]>(
-        `${base}/submissions/${sub.id}/versions`,
-      );
-      if (res.ok) {
-        setVersions(res.data);
-      } else {
-        toast.error(res.error.message || "Failed to load version history");
-      }
+      const res = await apiFetch<SubmissionVersionDto[]>(`${base}/submissions/${sub.id}/versions`);
+      if (res.ok) setVersions(res.data);
+      else toast.error("Couldn't load the history", { description: res.error.message });
     } finally {
       setVersionsLoading(false);
     }
   }
 
-  // Handle withdraw (SUB-13)
   async function confirmWithdraw() {
     if (!withdrawTarget) return;
     setWithdrawing(true);
@@ -161,295 +114,231 @@ export function SubmitterDashboard({
         body: { action: "withdraw" },
       });
       if (res.ok) {
-        toast.success("Submission withdrawn");
+        toast.success("Abstract withdrawn");
         setWithdrawTarget(null);
         await loadSubmissions();
       } else {
-        toast.error(res.error.message || "Could not withdraw submission");
+        toast.error("Couldn't withdraw the abstract", { description: res.error.message });
       }
     } finally {
       setWithdrawing(false);
     }
   }
 
-  return (
-    <div className="mx-auto max-w-4xl py-10 px-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-4 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            My Submissions
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track status, edit drafts, review decisions, and manage presentation slots.
-          </p>
-        </div>
+  const deadlineOpen = !!deadline && canSubmit;
 
-        <Button
-          type="button"
-          onClick={() => router.push(`/${orgSlug}/${eventSlug}/submit`)}
-          className="gap-1.5 h-10 px-4"
-        >
-          <Plus className="size-4" />
-          Submit New Abstract
-        </Button>
-      </div>
+  return (
+    <div className="mx-auto max-w-3xl px-gutter py-6 md:py-8">
+      <PageHeader
+        title="My submissions"
+        description="Track each abstract, finish drafts and see decisions."
+        actions={
+          canSubmit ? (
+            <Button asChild>
+              <Link href={`${portal}/submit`}>
+                <Plus data-icon="inline-start" />
+                New abstract
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {deadlineOpen ? <DeadlineCountdown label="Submissions close" deadline={deadline!} className="mb-6" /> : null}
 
       {loading ? (
-        <div className="flex min-h-[300px] items-center justify-center">
-          <p className="text-sm text-muted-foreground animate-pulse">Loading submissions…</p>
-        </div>
+        <CardListSkeleton count={2} label="Loading your abstracts…" />
+      ) : loadError ? (
+        <ErrorState title="Your abstracts didn't load" description={loadError} onRetry={() => void loadSubmissions()} />
       ) : submissions.length === 0 ? (
-        <Card className="border border-dashed border-border bg-white text-center py-12 px-6">
-          <CardContent className="space-y-4">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <FileText className="size-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">No abstracts yet</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                You haven&apos;t submitted any abstracts for this event. Start by creating a draft.
-              </p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => router.push(`/${orgSlug}/${eventSlug}/submit`)}
-              className="gap-1.5"
-            >
-              <Plus className="size-4" />
-              Create your first abstract
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          title="No abstracts yet"
+          description={
+            canSubmit
+              ? "Start one now — it's saved as a draft as you go, so you can finish later."
+              : "Submissions aren't open at the moment."
+          }
+          action={
+            canSubmit ? (
+              <Button asChild>
+                <Link href={`${portal}/submit`}>
+                  <Plus data-icon="inline-start" />
+                  Start an abstract
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline">
+                <Link href={portal}>See key dates</Link>
+              </Button>
+            )
+          }
+        />
       ) : (
-        <div className="space-y-4">
+        <ul className="space-y-4">
           {submissions.map((sub) => {
-            const statusConfig = STATUS_CONFIG[sub.status] || STATUS_CONFIG.DRAFT!;
-            const isDraftOrRevisions = ["DRAFT", "REVISIONS_REQUESTED"].includes(sub.status);
+            const editable = ["DRAFT", "REVISIONS_REQUESTED"].includes(sub.status);
             const canWithdraw = ["DRAFT", "SUBMITTED"].includes(sub.status);
-            const isAccepted = sub.status === "ACCEPTED" || sub.status === "CONFIRMED";
+            const accepted = sub.status === "ACCEPTED";
+            const decided = DECIDED.has(sub.status);
             const presenter = sub.authors?.find((a) => a.isPresenting);
 
             return (
-              <Card
-                key={sub.id}
-                className="border border-border bg-white shadow-sm hover:border-border/80 transition-all"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={`text-xs font-semibold px-2.5 py-0.5 border ${statusConfig.color}`}
-                      >
-                        {statusConfig.label}
-                      </Badge>
-                      {sub.refNo ? (
-                        <span className="font-mono text-xs font-bold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
-                          {sub.refNo}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="size-3" />
-                      <span>
-                        Updated {new Date(sub.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
-                      </span>
-                    </div>
+              <li key={sub.id} className="overflow-hidden rounded-lg border border-border bg-card">
+                <div className="p-4 md:p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={sub.status} />
+                    {sub.refNo ? (
+                      <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-sm font-semibold">{sub.refNo}</span>
+                    ) : null}
+                    <span className="ml-auto text-sm text-muted-foreground">Updated {formatLongDate(sub.updatedAt)}</span>
                   </div>
-
-                  <CardTitle className="text-lg font-bold text-foreground mt-2 leading-snug">
-                    {sub.title || "Untitled Abstract"}
-                  </CardTitle>
-
-                  <CardDescription className="text-xs text-muted-foreground">
-                    {statusConfig.desc}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="space-y-3 pb-3">
-                  <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-muted-foreground">
+                  <h2 className="mt-3 text-lg leading-snug font-semibold [overflow-wrap:anywhere]">
+                    {sub.title || "Untitled abstract"}
+                  </h2>
+                  <p className="mt-1 text-base text-muted-foreground">{STATUS_COPY[sub.status] ?? ""}</p>
+                  <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                     {presenter ? (
-                      <span>
-                        Presenter: <strong className="text-foreground">{presenter.surname}, {presenter.initials}</strong>
-                      </span>
-                    ) : null}
-                    <span>Word Count: <strong className="text-foreground">{sub.wordCount}</strong></span>
-                    {sub.preferredPresentationType ? (
-                      <span>Preference: <strong className="text-foreground uppercase">{sub.preferredPresentationType}</strong></span>
-                    ) : null}
-                  </div>
-
-                  {/* SUB-16: Accepted Registration Callout */}
-                  {isAccepted ? (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                          <CheckCircle2 className="size-4 text-emerald-600" />
-                          Abstract accepted for presentation!
-                        </p>
-                        <p className="text-xs text-emerald-700 mt-0.5">
-                          The presenting author must complete registration to confirm their slot in the programme.
-                        </p>
+                      <div className="flex gap-1">
+                        <dt className="text-muted-foreground">Presenter</dt>
+                        <dd className="font-medium">{presenter.surname} {presenter.initials}</dd>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shrink-0 h-9"
-                        onClick={() => router.push(`/${orgSlug}/${eventSlug}/register`)}
-                      >
-                        Register now
-                        <ChevronRight className="size-4 ml-1" />
+                    ) : null}
+                    <div className="flex gap-1">
+                      <dt className="text-muted-foreground">Words</dt>
+                      <dd className="font-medium tabular-nums">{sub.wordCount}</dd>
+                    </div>
+                    {sub.preferredPresentationType ? (
+                      <div className="flex gap-1">
+                        <dt className="text-muted-foreground">Prefers</dt>
+                        <dd className="font-medium capitalize">{sub.preferredPresentationType}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+
+                  {sub.status === "DRAFT" && deadlineOpen ? (
+                    <p className="mt-3 rounded-md bg-warning-tint px-3 py-2 text-sm text-warning-foreground">
+                      Not submitted yet. Submit before {formatLongDateTime(deadline)}.
+                    </p>
+                  ) : null}
+
+                  {accepted ? (
+                    <div className="mt-4 flex flex-col gap-3 rounded-md border border-success/30 bg-success-tint p-4 sm:flex-row sm:items-center">
+                      <p className="flex-1 text-base text-success-foreground">
+                        Congratulations — accepted. Register the presenting author to confirm the slot.
+                      </p>
+                      <Button asChild>
+                        <Link href={`${portal}/register`}>
+                          <Ticket data-icon="inline-start" />
+                          Register now
+                        </Link>
                       </Button>
                     </div>
                   ) : null}
-                </CardContent>
+                </div>
 
-                <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs gap-1 text-muted-foreground"
-                      onClick={() => viewVersions(sub)}
-                    >
-                      <History className="size-3.5" />
-                      History
+                <div className="flex flex-wrap items-center gap-2 border-t border-border bg-surface/60 px-3 py-2">
+                  {editable ? (
+                    <Button asChild size="sm">
+                      <Link href={`${portal}/submit?id=${sub.id}`}>
+                        <Pencil data-icon="inline-start" />
+                        {sub.status === "REVISIONS_REQUESTED" ? "Edit revisions" : "Continue draft"}
+                      </Link>
                     </Button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {canWithdraw ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                        onClick={() => setWithdrawTarget(sub)}
-                      >
-                        Withdraw
-                      </Button>
-                    ) : null}
-
-                    {isDraftOrRevisions ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          router.push(`/${orgSlug}/${eventSlug}/submit?id=${sub.id}`)
-                        }
-                      >
-                        {sub.status === "REVISIONS_REQUESTED" ? "Edit Revisions" : "Continue Draft"}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          router.push(`/${orgSlug}/${eventSlug}/submit?id=${sub.id}`)
-                        }
-                      >
-                        View Abstract
-                      </Button>
-                    )}
-                  </div>
-                </CardFooter>
-              </Card>
+                  ) : (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`${portal}/submit?id=${sub.id}`}>View abstract</Link>
+                    </Button>
+                  )}
+                  {decided ? (
+                    <Button size="sm" variant="outline" onClick={() => setDecisionSub(sub)}>
+                      <Gavel data-icon="inline-start" />
+                      View decision
+                    </Button>
+                  ) : null}
+                  <Button size="sm" variant="ghost" onClick={() => void viewVersions(sub)}>
+                    <History data-icon="inline-start" />
+                    History
+                  </Button>
+                  {canWithdraw ? (
+                    <Button size="sm" variant="ghost" className="ml-auto text-danger-foreground" onClick={() => setWithdrawTarget(sub)}>
+                      Withdraw…
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
-      {/* Version History Dialog (SUB-13) */}
-      <Dialog open={!!versionSub} onOpenChange={(open) => !open && setVersionSub(null)}>
-        <DialogContent className="max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="size-5 text-primary" />
-              <span>Version History</span>
-            </DialogTitle>
-            <DialogDescription>
-              Changes are tracked automatically every time your abstract is updated or status is changed.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto">
-            {versionsLoading ? (
-              <p className="text-xs text-muted-foreground">Loading versions…</p>
-            ) : versions.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No historical versions recorded yet.</p>
-            ) : (
-              versions.map((ver) => (
-                <div
-                  key={ver.id}
-                  className="p-3 rounded-lg border border-border bg-muted/20 space-y-1 text-xs"
-                >
-                  <div className="flex items-center justify-between font-medium">
-                    <span className="font-semibold text-foreground">Version {ver.version}</span>
-                    <span className="text-muted-foreground">
-                      {new Date(ver.createdAt).toLocaleString([], {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground text-[11px]">
-                    Recorded by {ver.createdById ? "Author" : "System"}
-                  </p>
-                </div>
-              ))
-            )}
+      <SidePanel
+        open={!!decisionSub}
+        onOpenChange={(o) => !o && setDecisionSub(null)}
+        title="Decision"
+        description={decisionSub?.title}
+        footer={<Button variant="outline" onClick={() => setDecisionSub(null)}>Close</Button>}
+      >
+        {decisionSub ? (
+          <div className="space-y-4">
+            <StatusBadge status={decisionSub.status} />
+            <p className="text-base">{STATUS_COPY[decisionSub.status]}</p>
+            {decisionSub.refNo ? (
+              <p className="text-sm text-muted-foreground">
+                Reference <span className="font-mono font-semibold text-foreground">{decisionSub.refNo}</span>
+              </p>
+            ) : null}
+            <p className="text-sm text-muted-foreground">
+              Reviewer comments appear here if the organisers choose to share them.
+            </p>
+            {decisionSub.status === "ACCEPTED" ? (
+              <Button asChild className="w-full sm:w-auto">
+                <Link href={`${portal}/register`}>
+                  Register now
+                  <ChevronRight data-icon="inline-end" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
+        ) : null}
+      </SidePanel>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setVersionSub(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SidePanel
+        open={!!versionSub}
+        onOpenChange={(o) => !o && setVersionSub(null)}
+        title="History"
+        description="A copy is kept every time the abstract is saved or its status changes."
+        footer={<Button variant="outline" onClick={() => setVersionSub(null)}>Close</Button>}
+      >
+        {versionsLoading ? (
+          <p className="flex items-center gap-2 text-base text-muted-foreground" role="status">
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            Loading history…
+          </p>
+        ) : versions.length === 0 ? (
+          <p className="text-base text-muted-foreground">No earlier versions yet.</p>
+        ) : (
+          <ol className="space-y-2">
+            {versions.map((ver) => (
+              <li key={ver.id} className={cn("flex items-center justify-between rounded-md border border-border px-4 py-3")}>
+                <span className="text-base font-medium">Version {ver.version}</span>
+                <span className="text-sm text-muted-foreground">{formatLongDateTime(ver.createdAt)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </SidePanel>
 
-      {/* Withdraw Confirmation Dialog */}
-      <Dialog open={!!withdrawTarget} onOpenChange={(open) => !open && setWithdrawTarget(null)}>
-        <DialogContent className="max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle className="text-destructive flex items-center gap-2">
-              <AlertCircle className="size-5" />
-              <span>Withdraw Abstract?</span>
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to withdraw &quot;{withdrawTarget?.title}&quot;? Withdrawn abstracts will not be considered for review.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter className="mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setWithdrawTarget(null)}
-              disabled={withdrawing}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={confirmWithdraw}
-              disabled={withdrawing}
-            >
-              {withdrawing ? "Withdrawing…" : "Confirm Withdrawal"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!withdrawTarget}
+        onOpenChange={(o) => !o && setWithdrawTarget(null)}
+        title="Withdraw this abstract?"
+        description={`“${withdrawTarget?.title ?? ""}” won't be reviewed. You can't undo this — you'd need to submit it again as a new abstract.`}
+        confirmLabel="Withdraw abstract"
+        destructive
+        loading={withdrawing}
+        onConfirm={confirmWithdraw}
+      />
     </div>
   );
 }
-

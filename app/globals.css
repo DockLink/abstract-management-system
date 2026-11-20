@@ -410,6 +410,28 @@
   }
 }
 
+/* Printing (e.g. "Download PDF" on the submission confirmation): only the
+   element with id="print-abstract" is printed when present. */
+@media print {
+  body:has(#print-abstract) * {
+    visibility: hidden;
+  }
+  body:has(#print-abstract) #print-abstract,
+  body:has(#print-abstract) #print-abstract * {
+    visibility: visible;
+  }
+  body:has(#print-abstract) #print-abstract {
+    position: absolute;
+    inset: 0 0 auto 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  @page {
+    margin: 18mm;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

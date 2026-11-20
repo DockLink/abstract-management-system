@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { resolveOrgEventBySlug } from "@/lib/events/resolve";
@@ -12,6 +13,8 @@ export default async function SubmitPage({
   params: Promise<{ orgSlug: string; eventSlug: string }>;
   searchParams: Promise<{ id?: string }>;
 }) {
+  // Auth lookups read the clock; render at request time.
+  await connection();
   const { orgSlug, eventSlug } = await params;
   const { id: existingSubmissionId } = await searchParams;
 

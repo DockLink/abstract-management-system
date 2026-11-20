@@ -1,7 +1,10 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { resolveOrgEventBySlug } from "@/lib/events/resolve";
 import { SubmitterDashboard } from "@/components/submissions/submitter-dashboard";
+import { apiFetchServer } from "@/lib/api/server";
+import type { PublicEventDto } from "@/lib/types/api";
 
 export const instant = false;
 
@@ -10,6 +13,8 @@ export default async function MySubmissionsPage({
 }: {
   params: Promise<{ orgSlug: string; eventSlug: string }>;
 }) {
+  // Auth lookups read the clock; render at request time.
+  await connection();
   const { orgSlug, eventSlug } = await params;
 
   const supabase = await createClient();
@@ -22,7 +27,10 @@ export default async function MySubmissionsPage({
     redirect(`/login?next=${encodeURIComponent(nextUrl)}`);
   }
 
-  const { orgId, eventId } = await resolveOrgEventBySlug(orgSlug, eventSlug);
+  const [{ orgId, eventId }, pub] = await Promise.all([
+    resolveOrgEventBySlug(orgSlug, eventSlug),
+    apiFetchServer<PublicEventDto>(`/api/v1/public/orgs/${orgSlug}/events/${eventSlug}`, { token: null }),
+  ]);
 
   return (
     <div>
@@ -31,6 +39,8 @@ export default async function MySubmissionsPage({
         eventId={eventId}
         orgSlug={orgSlug}
         eventSlug={eventSlug}
+        deadline={pub.ok ? pub.data.event.keyDates.submissionCloseAt : null}
+        canSubmit={pub.ok ? pub.data.portalState.canSubmit : true}
       />
     </div>
   );

@@ -246,6 +246,8 @@ export function EventShell({
   const inAdminArea = pathname.startsWith(paths.admin);
   // The review screen is a focused, full-height workspace with its own header.
   const focusMode = pathname.startsWith(`${paths.portal}/reviews/`);
+  // The abstract form has its own sticky Back/Next bar; hide the tab bar there.
+  const taskMode = pathname.startsWith(`${paths.portal}/submit`);
 
   if (focusMode) {
     return <BrandScope brand={event.primaryColor}>{children}</BrandScope>;
@@ -278,7 +280,7 @@ export function EventShell({
   const linkable = groups.flatMap((g) => g.items).filter((i) => i.href);
   const tabs = linkable.filter((i) => i.primary).slice(0, 4);
   const showMore = linkable.length > tabs.length || roles.length > 1;
-  const showTabs = !!user && tabs.length >= 2;
+  const showTabs = !!user && tabs.length >= 2 && !taskMode;
 
   const userMenu = (compact: boolean) => (
     <UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} returnTo={pathname} compact={compact} />

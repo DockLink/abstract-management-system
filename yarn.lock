@@ -2112,6 +2112,16 @@
   resolved "https://registry.yarnpkg.com/@tiptap/extension-strike/-/extension-strike-3.33.1.tgz#e7979e496e77d0d0bc2e5ba2e51499535e602fba"
   integrity sha512-GTkkSGC8Z3v3GpW480ymZ41sbZMGDrL9yNzfAumyNA+M5PnavZcDeki+D9XhjN0qBsJ/5ZL0DHkWKuxfQkDLgQ==
 
+"@tiptap/extension-subscript@3.33.1":
+  version "3.33.1"
+  resolved "https://registry.yarnpkg.com/@tiptap/extension-subscript/-/extension-subscript-3.33.1.tgz#07f3b2282e598a0d3d677d41bbbdfad1aad4b6f1"
+  integrity sha512-Xlla+S57j+qpPw8xLYE6n3wSTUZ8djTYdfYTJBOjcZb2+gnOlZrFdH+arQ/iprcrVK/MCbmLEH+FmD59yeY4HA==
+
+"@tiptap/extension-superscript@3.33.1":
+  version "3.33.1"
+  resolved "https://registry.yarnpkg.com/@tiptap/extension-superscript/-/extension-superscript-3.33.1.tgz#ae0b62db54c17916fcac1b14c236f64dc7cc72d7"
+  integrity sha512-UKl+J/wSQFqGje5VSPz8K3LXUEZuiN0Zm0euAPY7YTMl0GKWqYUfHIiCwMGMVUyO40WDG4MiVA4WS4GHLVZz1A==
+
 "@tiptap/extension-text@3.33.1":
   version "3.33.1"
   resolved "https://registry.yarnpkg.com/@tiptap/extension-text/-/extension-text-3.33.1.tgz#5e65a20d73521121f53a70563e77396ff99a08d9"
