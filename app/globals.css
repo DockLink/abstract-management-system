@@ -356,6 +356,60 @@
   --radius: 0.5rem;
 }
 
+/* Rich text from the guidelines editor (TipTap HTML, sanitised server-side).
+   No typography plugin: these few rules cover what the editor can produce. */
+@layer components {
+  .rich-text {
+    max-width: 68ch;
+    font-size: var(--text-base);
+    line-height: 1.65;
+    color: var(--foreground);
+  }
+  .rich-text > * + * {
+    margin-top: 0.85em;
+  }
+  .rich-text :where(h1, h2, h3, h4) {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.25;
+    margin-top: 1.5em;
+  }
+  .rich-text :where(h1, h2) {
+    font-size: var(--text-xl);
+  }
+  .rich-text :where(h3, h4) {
+    font-size: var(--text-lg);
+  }
+  .rich-text :where(ul, ol) {
+    padding-left: 1.4em;
+  }
+  .rich-text ul {
+    list-style: disc;
+  }
+  .rich-text ol {
+    list-style: decimal;
+  }
+  .rich-text li + li {
+    margin-top: 0.35em;
+  }
+  .rich-text li::marker {
+    color: var(--brand-ink);
+  }
+  .rich-text a {
+    color: var(--brand-ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .rich-text strong {
+    font-weight: 600;
+  }
+  .rich-text blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 1em;
+    color: var(--muted-foreground);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -37,6 +37,26 @@ export function formatLongDateTime(
   return formatInTimeZone(date, EVENT_TZ, "d MMMM yyyy, h:mm aaa");
 }
 
+/**
+ * Event date range in house style (Asia/Colombo):
+ * "15–17 February 2027", "28 February – 2 March 2027",
+ * "30 December 2026 – 2 January 2027", or a single date.
+ */
+export function formatDateRange(
+  start: Date | string | null | undefined,
+  end: Date | string | null | undefined,
+): string | null {
+  const a = toDate(start);
+  const b = toDate(end);
+  if (!a && !b) return null;
+  if (!a || !b) return formatLongDate(a ?? b);
+  const f = (d: Date, p: string) => formatInTimeZone(d, EVENT_TZ, p);
+  if (f(a, "yyyy-MM-dd") === f(b, "yyyy-MM-dd")) return formatLongDate(a);
+  if (f(a, "yyyy") !== f(b, "yyyy")) return `${formatLongDate(a)} – ${formatLongDate(b)}`;
+  if (f(a, "MM") !== f(b, "MM")) return `${f(a, "d MMMM")} – ${f(b, "d MMMM yyyy")}`;
+  return `${f(a, "d")}–${f(b, "d MMMM yyyy")}`;
+}
+
 /** Clock time for autosave stamps: "12:04" (24h, Asia/Colombo). */
 export function formatClockTime(value: Date | string | null | undefined): string {
   const date = toDate(value);

@@ -8,7 +8,8 @@ registry.registerPath({
   path: "/api/v1/public/orgs/{orgSlug}/events/{eventSlug}",
   tags: ["Public"],
   summary: "Public event page payload",
-  description: "No authentication required.",
+  description:
+    "No authentication required. Includes branding, key dates, guidelines, portal state and the event's submission categories (names only).",
   request: { params: publicEventParams },
   responses: {
     200: jsonResponse(dataEnvelope(z.unknown()), "Public event"),

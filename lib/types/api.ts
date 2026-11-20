@@ -202,6 +202,8 @@ export type PublicEventDto = {
     guidelinesPdfPath: string | null;
     primaryColor: string | null;
     keyDates: KeyDates;
+    /** Submission tracks, in display order. */
+    categories: Array<{ id: string; name: string }>;
   };
   portalState: PortalState;
 };

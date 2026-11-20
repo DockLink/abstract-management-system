@@ -159,7 +159,7 @@ export function AppShell({
           <main
             id="main-content"
             className={cn(
-              "w-full flex-1 px-gutter py-6 md:px-6 md:py-8",
+              "w-full flex-1 px-4 py-6 md:px-6 md:py-8",
               bottomBar && "pb-28 lg:pb-8",
               contentClassName,
             )}

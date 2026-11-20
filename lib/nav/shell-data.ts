@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { apiFetchServer } from "@/lib/api/server";
 import { resolveOrgBySlug, resolveOrgEventBySlug } from "@/lib/events/resolve";
 import { getEventLifecycleStatus, type EventLifecycleStatus } from "@/lib/events/status";
@@ -61,6 +62,8 @@ export async function loadEventShellData(
   orgSlug: string,
   eventSlug: string,
 ): Promise<EventShellData> {
+  // Event status depends on the current time: render per request.
+  await connection();
   const [{ org, event }, me] = await Promise.all([
     resolveOrgEventBySlug(orgSlug, eventSlug),
     loadMe(),

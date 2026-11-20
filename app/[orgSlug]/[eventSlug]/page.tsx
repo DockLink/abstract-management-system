@@ -1,21 +1,21 @@
-import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EventDate } from "@/components/shared/event-date";
-import { KeyDateTimeline } from "@/components/shared/key-date-timeline";
+import { ArrowRight, ClipboardList, FilePlus2 } from "lucide-react";
+import { CategoriesList, ContactBlock, EventSection, Guidelines } from "@/components/event-page/event-sections";
+import { EventHero } from "@/components/event-page/event-hero";
+import { KeyDates, countdownTarget } from "@/components/event-page/key-dates";
+import { DeadlineCountdown } from "@/components/shared/deadline-countdown";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { apiFetchServer } from "@/lib/api/server";
+import { formatDateRange, formatLongDate, formatLongDateTime } from "@/lib/dates";
 import { sanitizeRichHtml } from "@/lib/html";
 import { createSignedAssetUrl } from "@/lib/services/events/storage";
 import type { PublicEventDto } from "@/lib/types/api";
 
 export const instant = false;
 
+/** Public event page (EVT-02). Branding, nav and footer come from the event shell layout. */
 export default async function PublicEventPage({
   params,
 }: {
@@ -46,139 +46,139 @@ export default async function PublicEventPage({
     ? sanitizeRichHtml(event.guidelinesRichText)
     : null;
 
+  const base = `/${orgSlug}/${eventSlug}`;
+  const { keyDates } = event;
+  const categories = event.categories ?? [];
+  const countdown = countdownTarget(keyDates, portalState);
+  const opensLater =
+    !!keyDates.submissionOpenAt &&
+    new Date(keyDates.submissionOpenAt).getTime() > new Date(portalState.now).getTime();
+
+  const submitButton = portalState.canSubmit ? (
+    <Button asChild size="lg">
+      <Link href={`${base}/submit`}>
+        <FilePlus2 data-icon="inline-start" />
+        Submit abstract
+      </Link>
+    </Button>
+  ) : (
+    <Button size="lg" disabled>
+      Submissions closed
+    </Button>
+  );
+
   return (
     <div>
-      <div className="mx-auto max-w-3xl px-4 py-10 md:py-14">
-        {bannerUrl ? (
-          <div className="relative mb-6 aspect-[2.4/1] overflow-hidden rounded-xl border border-border bg-muted">
-            <Image
-              src={bannerUrl}
-              alt=""
-              fill
-              className="object-cover"
-              priority
-              unoptimized
-            />
-          </div>
-        ) : null}
-
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start">
-          {logoUrl ? (
-            <div className="relative size-20 shrink-0 overflow-hidden rounded-xl border border-border bg-white">
-              <Image
-                src={logoUrl}
-                alt=""
-                fill
-                className="object-contain p-2"
-                unoptimized
-              />
-            </div>
-          ) : null}
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-muted-foreground">
-              {organisation.name}
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-              {event.name}
-            </h1>
-            {event.edition ? (
-              <p className="mt-2 text-lg text-muted-foreground">
-                {event.edition}
-              </p>
-            ) : null}
-            {event.venue ? (
-              <p className="mt-2 text-sm text-foreground">{event.venue}</p>
-            ) : null}
-            {event.startsAt || event.endsAt ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                <EventDate value={event.startsAt} includeTime={false} />
-                {event.startsAt && event.endsAt ? " — " : null}
-                <EventDate value={event.endsAt} includeTime={false} />
-              </p>
-            ) : null}
-          </div>
-        </header>
-
-        {event.contactEmail || event.contactPhone ? (
-          <p className="mb-8 text-sm text-muted-foreground">
-            Questions?{" "}
-            {event.contactEmail ? (
-              <a
-                href={`mailto:${event.contactEmail}`}
-                className="text-primary hover:underline"
-              >
-                {event.contactEmail}
-              </a>
-            ) : null}
-            {event.contactEmail && event.contactPhone ? " · " : null}
-            {event.contactPhone ? <span>{event.contactPhone}</span> : null}
-          </p>
-        ) : null}
-
-        {guidelinesHtml ? (
-          <section className="mb-10">
-            <h2 className="mb-3 text-lg font-semibold">Submission guidelines</h2>
-            <div
-              className="prose prose-sm max-w-none rounded-xl border border-border bg-white p-6"
-              dangerouslySetInnerHTML={{ __html: guidelinesHtml }}
-            />
-            {pdfUrl ? (
-              <p className="mt-4">
-                <a
-                  href={pdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Download guidelines (PDF)
-                </a>
-              </p>
-            ) : null}
-          </section>
-        ) : pdfUrl ? (
-          <section className="mb-10">
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-medium text-primary hover:underline"
-            >
-              Download submission guidelines (PDF)
-            </a>
-          </section>
-        ) : null}
-
-        <Card className="mb-10">
-          <CardHeader>
-            <CardTitle className="text-base">Important dates</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <KeyDateTimeline keyDates={event.keyDates} />
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          {portalState.canSubmit ? (
-            <Button asChild className="h-11 px-8">
-              <a href={`/${orgSlug}/${eventSlug}/submit`}>Submit abstract</a>
-            </Button>
+      <EventHero
+        orgName={organisation.name}
+        name={event.name}
+        edition={event.edition}
+        venue={event.venue}
+        dateRange={formatDateRange(event.startsAt, event.endsAt)}
+        bannerUrl={bannerUrl}
+        logoUrl={logoUrl}
+        status={
+          portalState.canSubmit ? (
+            <StatusBadge status="open" />
           ) : (
-            <Button className="h-11 px-8" disabled>
-              Submissions closed
+            <StatusBadge
+              status="closed"
+              label={
+                opensLater
+                  ? `Submissions open ${formatLongDate(keyDates.submissionOpenAt)}`
+                  : "Submissions closed"
+              }
+            />
+          )
+        }
+        actions={
+          <>
+            {submitButton}
+            <Button asChild variant="outline" size="lg">
+              <Link href={`${base}/my-submissions`}>My submissions</Link>
             </Button>
-          )}
-          <Button asChild variant="outline" className="h-11 px-6">
-            <a href={`/${orgSlug}/${eventSlug}/my-submissions`}>My submissions</a>
-          </Button>
-          <Button asChild variant="ghost" className="h-11 px-4 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
-            <a href={`/${orgSlug}/${eventSlug}/reviews`}>Reviewer Portal &rarr;</a>
-          </Button>
-          {!portalState.canSubmit ? (
-            <p className="text-sm text-muted-foreground">
-              Submissions are not open at this time.
-            </p>
-          ) : null}
+          </>
+        }
+        footnote={
+          <div className="flex flex-col gap-3">
+            {!portalState.canSubmit ? (
+              <p className="text-base text-muted-foreground">Submissions are not open at this time.</p>
+            ) : null}
+            {countdown ? (
+              <DeadlineCountdown label={countdown.label} deadline={countdown.deadline} className="max-w-md" />
+            ) : null}
+          </div>
+        }
+      />
+
+      <div className="mx-auto grid max-w-6xl gap-10 px-gutter py-10 md:px-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-14 lg:py-14">
+        <div className="min-w-0 space-y-12">
+          <EventSection id="call-for-abstracts" title="Call for abstracts">
+            <div className="space-y-5">
+              <p className="max-w-[68ch] text-lg">
+                {keyDates.submissionCloseAt ? (
+                  <>
+                    Send your abstract by{" "}
+                    <strong className="font-semibold">{formatLongDateTime(keyDates.submissionCloseAt)}</strong>{" "}
+                    (Sri Lanka time).
+                  </>
+                ) : (
+                  <>The submission deadline will be announced soon.</>
+                )}{" "}
+                {categories.length > 0
+                  ? `Choose the track that best fits your work from the ${categories.length} below.`
+                  : null}
+              </p>
+              <Guidelines html={guidelinesHtml} pdfUrl={pdfUrl} />
+            </div>
+          </EventSection>
+
+          <EventSection id="tracks" title="Tracks">
+            <CategoriesList categories={categories} />
+          </EventSection>
+
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-primary-tint/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-lg font-semibold">
+                {portalState.canSubmit ? "Ready to submit?" : "Already submitted?"}
+              </p>
+              <p className="text-base text-muted-foreground">
+                {portalState.canSubmit
+                  ? "You can save a draft and come back before the deadline."
+                  : "Track your abstracts and decisions from My submissions."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {portalState.canSubmit ? submitButton : (
+                <Button asChild variant="outline">
+                  <Link href={`${base}/my-submissions`}>My submissions</Link>
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
+
+        <aside className="min-w-0 space-y-8 lg:sticky lg:top-24 lg:self-start">
+          <EventSection id="key-dates" title="Key dates">
+            <KeyDates keyDates={keyDates} now={portalState.now} />
+            <p className="mt-4 text-sm text-muted-foreground">All times are Sri Lanka time (Asia/Colombo).</p>
+          </EventSection>
+
+          <ContactBlock
+            orgName={organisation.name}
+            email={event.contactEmail}
+            phone={event.contactPhone}
+          />
+
+          <Link
+            href={`${base}/reviews`}
+            className="-mx-2 flex min-h-control items-center gap-3 rounded-md px-2 text-base text-brand-ink hover:bg-muted"
+          >
+            <ClipboardList className="size-5 shrink-0" aria-hidden />
+            <span className="flex-1">Reviewer? Open your review list</span>
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </aside>
       </div>
     </div>
   );

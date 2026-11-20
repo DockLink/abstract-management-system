@@ -19,7 +19,14 @@ export async function GET(_request: Request, context: Ctx) {
     });
     if (!event) return notFound("Event not found");
 
-    return ok(serializePublicEvent(event, org));
+    // Track names are public (shown on the call for abstracts); chairs are not.
+    const categories = await prisma.category.findMany({
+      where: { orgId: org.id, eventId: event.id },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true },
+    });
+
+    return ok(serializePublicEvent(event, org, categories));
   } catch (error) {
     console.error("GET /public/.../events/:slug", error);
     return serverError();

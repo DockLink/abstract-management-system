@@ -36,6 +36,7 @@ export function serializeEvent(event: Event) {
 export function serializePublicEvent(
   event: Event,
   org: { name: string; slug: string; logoPath: string | null },
+  categories: Array<{ id: string; name: string }> = [],
 ) {
   const portalState = derivePortalState(event);
   return {
@@ -66,6 +67,7 @@ export function serializePublicEvent(
         earlyBirdEndAt: event.earlyBirdEndAt?.toISOString() ?? null,
         registrationCloseAt: event.registrationCloseAt?.toISOString() ?? null,
       },
+      categories: categories.map((c) => ({ id: c.id, name: c.name })),
     },
     portalState,
   };
