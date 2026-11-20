@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { EventsListPage } from "@/components/setup/events-list-page";
 import { OrgShell } from "@/components/shell/org-shell";
 import { loadOrgShellData } from "@/lib/nav/shell-data";
@@ -13,6 +14,8 @@ export default async function OrgEventsPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
+  // Event status chips depend on the current time: render per request.
+  await connection();
   const [org, shell] = await Promise.all([
     resolveOrgBySlug(orgSlug),
     loadOrgShellData(orgSlug),

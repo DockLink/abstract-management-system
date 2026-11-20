@@ -87,7 +87,7 @@ export function FileUpload({
             ) : (
               <p className="truncate font-medium">{value.name}</p>
             )}
-            <p className="text-sm text-muted-foreground">{formatSize(value.size)}</p>
+            <p className="text-sm text-muted-foreground">{value.size > 0 ? formatSize(value.size) : "Uploaded"}</p>
           </div>
           {onRemove && !disabled ? (
             <Button variant="ghost" size="icon" onClick={onRemove} aria-label={`Remove ${value.name}`}>

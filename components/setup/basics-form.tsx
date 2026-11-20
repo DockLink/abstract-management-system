@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { toast } from "@/components/shared/toast";
+import { FormField } from "@/components/shared/form-field";
+import { FormSection } from "@/components/shared/form-section";
 import { EventHeaderPreview } from "@/components/setup/event-header-preview";
+import { ImageAssetField } from "@/components/setup/image-asset-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api/client";
 import {
   fromDatetimeLocalValue,
@@ -18,7 +22,7 @@ import type { EventDto } from "@/lib/types/api";
 
 const basicsSchema = z
   .object({
-    name: z.string().min(1, "Name is required").max(200),
+    name: z.string().min(1, "Enter the event name.").max(200),
     edition: z.string().max(200),
     venue: z.string().max(300),
     startsAt: z.string(),
@@ -27,7 +31,7 @@ const basicsSchema = z
       .string()
       .max(200)
       .refine((v) => !v || z.string().email().safeParse(v).success, {
-        message: "Invalid email",
+        message: "Enter a valid email address, like secretary@college.lk.",
       }),
     contactPhone: z.string().max(40),
   })
@@ -37,7 +41,7 @@ const basicsSchema = z
     if (start && end && end < start) {
       ctx.addIssue({
         code: "custom",
-        message: "End must be on or after start",
+        message: "The event must end on or after the day it starts.",
         path: ["endsAt"],
       });
     }
@@ -74,6 +78,7 @@ export function BasicsForm({
   const [bannerUrl, setBannerUrl] = useState(initialBannerUrl);
   const [uploading, setUploading] = useState<"logo" | "banner" | null>(null);
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
 
   const form = useForm<BasicsFormValues>({
     resolver: zodResolver(basicsSchema),
@@ -93,10 +98,11 @@ export function BasicsForm({
         { method: "POST", formData },
       );
       if (!result.ok) {
-        toast.error(result.error.message || "Upload failed");
+        toast.error(`Couldn't upload the ${kind}`, { description: result.error.message });
         return;
       }
       toast.success(`${kind === "logo" ? "Logo" : "Banner"} uploaded`);
+      router.refresh();
       if (kind === "logo" && logoUrl?.startsWith("blob:")) {
         URL.revokeObjectURL(logoUrl);
       }
@@ -128,11 +134,12 @@ export function BasicsForm({
         { method: "PATCH", body },
       );
       if (!result.ok) {
-        toast.error(result.error.message || "Could not save");
+        toast.error("Couldn't save event details", { description: result.error.message });
         return;
       }
-      toast.success("Event basics saved");
+      toast.success("Event details saved");
       form.reset(eventToDefaults(result.data));
+      router.refresh();
     } finally {
       setSaving(false);
     }
@@ -141,129 +148,97 @@ export function BasicsForm({
   const previewStarts = fromDatetimeLocalValue(watched.startsAt)?.toISOString() ?? null;
   const previewEnds = fromDatetimeLocalValue(watched.endsAt)?.toISOString() ?? null;
 
+  const errors = form.formState.errors;
+  const dirty = form.formState.isDirty;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <form
-        className="space-y-4"
-        onSubmit={form.handleSubmit(onSubmit)}
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <Label htmlFor="name">Event name</Label>
-            <Input id="name" className="h-10" {...form.register("name")} />
-            {form.formState.errors.name ? (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.name.message}
-              </p>
-            ) : null}
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <form className="min-w-0 space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        <FormSection title="Event details" description="Shown at the top of the public page and on emails.">
+          <FormField label="Event name" required error={errors.name?.message}>
+            <Input {...form.register("name")} />
+          </FormField>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <FormField label="Edition" optional help='e.g. "54th Annual Academic Sessions"'>
+              <Input {...form.register("edition")} />
+            </FormField>
+            <FormField label="Venue" optional help="e.g. BMICH, Colombo">
+              <Input {...form.register("venue")} />
+            </FormField>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="edition">Edition</Label>
-            <Input id="edition" className="h-10" {...form.register("edition")} />
+          <div className="grid gap-5 sm:grid-cols-2">
+            <FormField label="Starts" optional help="Sri Lanka time">
+              <Input type="datetime-local" {...form.register("startsAt")} />
+            </FormField>
+            <FormField label="Ends" optional error={errors.endsAt?.message} help="Sri Lanka time">
+              <Input type="datetime-local" {...form.register("endsAt")} />
+            </FormField>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="venue">Venue</Label>
-            <Input id="venue" className="h-10" {...form.register("venue")} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="startsAt">Starts</Label>
-            <Input
-              id="startsAt"
-              type="datetime-local"
-              className="h-10"
-              {...form.register("startsAt")}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="endsAt">Ends</Label>
-            <Input
-              id="endsAt"
-              type="datetime-local"
-              className="h-10"
-              {...form.register("endsAt")}
-            />
-            {form.formState.errors.endsAt ? (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.endsAt.message}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="contactEmail">Contact email</Label>
-            <Input
-              id="contactEmail"
-              type="email"
-              className="h-10"
-              {...form.register("contactEmail")}
-            />
-            {form.formState.errors.contactEmail ? (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.contactEmail.message}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="contactPhone">Contact phone</Label>
-            <Input
-              id="contactPhone"
-              className="h-10"
-              {...form.register("contactPhone")}
-            />
-          </div>
-        </div>
+        </FormSection>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="logo">Logo</Label>
-            <Input
-              id="logo"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="h-10"
-              disabled={uploading === "logo"}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void uploadAsset("logo", file);
-              }}
-            />
-            <p className="text-xs text-muted-foreground">PNG, JPEG, or WebP — max 5 MB</p>
+        <FormSection title="Contact" description="Where authors send questions. Shown on the public page.">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <FormField label="Email" optional error={errors.contactEmail?.message}>
+              <Input type="email" inputMode="email" {...form.register("contactEmail")} />
+            </FormField>
+            <FormField label="Phone" optional>
+              <Input type="tel" inputMode="tel" {...form.register("contactPhone")} />
+            </FormField>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="banner">Banner</Label>
-            <Input
-              id="banner"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="h-10"
-              disabled={uploading === "banner"}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void uploadAsset("banner", file);
-              }}
-            />
-            <p className="text-xs text-muted-foreground">PNG, JPEG, or WebP — max 5 MB</p>
-          </div>
-        </div>
+        </FormSection>
 
-        <Button type="submit" className="h-10" disabled={saving}>
-          {saving ? "Saving…" : "Save basics"}
-        </Button>
+        <FormSection
+          title="Logo and banner"
+          description="Uploads save straight away. Use a square logo and a wide banner (about 3:1)."
+        >
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ImageAssetField
+              label="Logo"
+              help="Square, at least 256 × 256 px. PNG with a transparent background works best."
+              url={logoUrl}
+              aspect="square"
+              uploading={uploading === "logo"}
+              onSelect={(file) => void uploadAsset("logo", file)}
+            />
+            <ImageAssetField
+              label="Banner"
+              help="About 1500 × 500 px. Avoid text near the edges — phones crop it."
+              url={bannerUrl}
+              aspect="wide"
+              uploading={uploading === "banner"}
+              onSelect={(file) => void uploadAsset("banner", file)}
+            />
+          </div>
+        </FormSection>
+
+        <div className="sticky bottom-0 z-10 -mx-gutter flex flex-col-reverse gap-2 border-t border-border bg-background/95 px-gutter py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-end md:mx-0 md:rounded-lg md:border md:px-4">
+          <p className="text-sm text-muted-foreground sm:mr-auto" aria-live="polite">
+            {dirty ? "You have unsaved changes." : "All changes saved."}
+          </p>
+          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => form.reset()}>
+            Discard
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+            {saving ? "Saving…" : "Save details"}
+          </Button>
+        </div>
       </form>
 
-      <div className="hidden lg:block">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
-          Live preview
-        </p>
-        <EventHeaderPreview
-          name={watched.name}
-          edition={watched.edition.trim() || null}
-          venue={watched.venue.trim() || null}
-          startsAt={previewStarts}
-          endsAt={previewEnds}
-          logoUrl={logoUrl}
-          bannerUrl={bannerUrl}
-        />
-      </div>
+      <aside className="hidden xl:block">
+        <div className="sticky top-24">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">Preview</p>
+          <EventHeaderPreview
+            name={watched.name}
+            edition={watched.edition.trim() || null}
+            venue={watched.venue.trim() || null}
+            startsAt={previewStarts}
+            endsAt={previewEnds}
+            logoUrl={logoUrl}
+            bannerUrl={bannerUrl}
+          />
+        </div>
+      </aside>
     </div>
   );
 }

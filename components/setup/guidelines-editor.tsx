@@ -30,7 +30,7 @@ export function GuidelinesEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm max-w-none min-h-[200px] px-3 py-2 focus:outline-none",
+          "rich-text max-w-none min-h-[220px] px-4 py-3 outline-none",
       },
     },
     onUpdate: ({ editor: ed }) => {
@@ -57,66 +57,41 @@ export function GuidelinesEditor({
     );
   }
 
+  const tools = [
+    { label: "Bold", icon: Bold, active: editor.isActive("bold"), run: () => editor.chain().focus().toggleBold().run() },
+    { label: "Italic", icon: Italic, active: editor.isActive("italic"), run: () => editor.chain().focus().toggleItalic().run() },
+    { label: "Bulleted list", icon: List, active: editor.isActive("bulletList"), run: () => editor.chain().focus().toggleBulletList().run() },
+    { label: "Numbered list", icon: ListOrdered, active: editor.isActive("orderedList"), run: () => editor.chain().focus().toggleOrderedList().run() },
+  ];
+
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-input", className)}>
-      <div className="flex flex-wrap gap-1 border-b border-border bg-muted/40 p-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          aria-pressed={editor.isActive("bold")}
-        >
-          <Bold className="size-4" />
+    <div
+      className={cn(
+        "overflow-hidden rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
+        className,
+      )}
+    >
+      <div role="toolbar" aria-label="Formatting" className="flex flex-wrap gap-1 border-b border-border bg-muted/50 p-1.5">
+        {tools.map(({ label, icon: Icon, active, run }) => (
+          <Button
+            key={label}
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={run}
+            aria-label={label}
+            aria-pressed={active}
+            className={cn(active && "bg-primary-tint text-brand-ink")}
+          >
+            <Icon />
+          </Button>
+        ))}
+        <span aria-hidden className="mx-1 my-1.5 w-px bg-border" />
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Undo" onClick={() => editor.chain().focus().undo().run()}>
+          <Undo2 />
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          aria-pressed={editor.isActive("italic")}
-        >
-          <Italic className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          aria-pressed={editor.isActive("bulletList")}
-        >
-          <List className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          aria-pressed={editor.isActive("orderedList")}
-        >
-          <ListOrdered className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => editor.chain().focus().undo().run()}
-        >
-          <Undo2 className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => editor.chain().focus().redo().run()}
-        >
-          <Redo2 className="size-4" />
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Redo" onClick={() => editor.chain().focus().redo().run()}>
+          <Redo2 />
         </Button>
       </div>
       <EditorContent editor={editor} />

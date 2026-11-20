@@ -4,17 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Loader2,
   MoreHorizontal,
   Pencil,
+  Plus,
   Trash2,
 } from "lucide-react";
-import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { EmptyState } from "@/components/shared/empty-state";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import { FormField } from "@/components/shared/form-field";
 import { PageHeader } from "@/components/shared/page-header";
+import { SidePanel } from "@/components/shared/side-panel";
+import { toast } from "@/components/shared/toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -30,22 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { apiFetch } from "@/lib/api/client";
 import { EventIcons } from "@/lib/events/icons";
 import type { CategoryDto, EventRoleDto } from "@/lib/types/api";
@@ -86,6 +72,8 @@ export function CategoriesPage({
   const [deleteTarget, setDeleteTarget] = useState<CategoryDto | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [reorderLoadingId, setReorderLoadingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const chairRoles = useMemo(
     () => roles.filter((r) => CHAIR_ROLES.has(r.role)),
@@ -106,11 +94,15 @@ export function CategoriesPage({
       apiFetch<EventRoleDto[]>(`${base}/roles`),
     ]);
 
-    if (catRes.ok) setCategories(catRes.data);
-    else toast.error(catRes.error.message || "Could not load categories");
+    if (catRes.ok) {
+      setCategories(catRes.data);
+      setLoadError(null);
+    } else {
+      setLoadError(catRes.error.message || "The categories couldn't be loaded.");
+    }
 
     if (rolesRes.ok) setRoles(rolesRes.data);
-    else toast.error(rolesRes.error.message || "Could not load roles");
+    else toast.error("Couldn't load the list of possible chairs", { description: rolesRes.error.message });
 
     setLoading(false);
   }, [base]);
@@ -123,6 +115,7 @@ export function CategoriesPage({
     setEditing(null);
     setName("");
     setChairUserId("none");
+    setNameError(null);
     setSheetOpen(true);
   }
 
@@ -130,15 +123,17 @@ export function CategoriesPage({
     setEditing(category);
     setName(category.name);
     setChairUserId(category.chairUserId ?? "none");
+    setNameError(null);
     setSheetOpen(true);
   }
 
   async function saveCategory() {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error("Category name is required");
+      setNameError("Enter a name for this track.");
       return;
     }
+    setNameError(null);
 
     const chair =
       chairUserId === "none" ? null : chairUserId;
@@ -154,10 +149,10 @@ export function CategoriesPage({
           },
         );
         if (!result.ok) {
-          toast.error(result.error.message || "Could not update category");
+          toast.error("Couldn't save the track", { description: result.error.message });
           return;
         }
-        toast.success("Category updated");
+        toast.success("Track saved");
       } else {
         const maxOrder = categories.reduce(
           (max, c) => Math.max(max, c.sortOrder),
@@ -172,10 +167,10 @@ export function CategoriesPage({
           },
         });
         if (!result.ok) {
-          toast.error(result.error.message || "Could not create category");
+          toast.error("Couldn't add the track", { description: result.error.message });
           return;
         }
-        toast.success("Category created");
+        toast.success("Track added");
       }
       setSheetOpen(false);
       await load();
@@ -193,10 +188,10 @@ export function CategoriesPage({
         { method: "DELETE" },
       );
       if (!result.ok) {
-        toast.error(result.error.message || "Could not delete category");
+        toast.error("Couldn't delete the track", { description: result.error.message });
         return;
       }
-      toast.success("Category deleted");
+      toast.success("Track deleted");
       setDeleteTarget(null);
       await load();
     } finally {
@@ -225,7 +220,7 @@ export function CategoriesPage({
         }),
       ]);
       if (!a.ok || !b.ok) {
-        toast.error("Could not reorder categories");
+        toast.error("Couldn't change the order", { description: "Refresh the page and try again." });
         return;
       }
       await load();
@@ -239,217 +234,177 @@ export function CategoriesPage({
     [categories],
   );
 
+  const columns: DataTableColumn<CategoryDto>[] = [
+    {
+      id: "order",
+      header: "#",
+      mobile: "meta",
+      className: "w-12 tabular-nums text-muted-foreground",
+      cell: (c) => <span className="text-sm text-muted-foreground tabular-nums">Track {sorted.indexOf(c) + 1}</span>,
+    },
+    { id: "name", header: "Track", mobile: "title", cell: (c) => <span className="font-medium">{c.name}</span> },
+    {
+      id: "chair",
+      header: "Track chair",
+      cell: (c) => {
+        const chair = c.chairUserId ? chairByUserId.get(c.chairUserId) : undefined;
+        return chair ? (
+          <span className="inline-flex items-center gap-2">
+            <Avatar className="size-7">
+              <AvatarFallback className="bg-primary-tint text-xs text-brand-ink">{initials(chair)}</AvatarFallback>
+            </Avatar>
+            <span>{displayName(chair)}</span>
+          </span>
+        ) : (
+          <span className="text-warning-foreground">No chair yet</span>
+        );
+      },
+    },
+  ];
+
   return (
     <div>
       <PageHeader
-        title="Categories"
-        description="Define submission tracks and assign track chairs."
+        title="Tracks and chairs"
+        description="The categories authors choose from, each with a track chair who assigns reviewers (EVT-04)."
         actions={
-          <Button type="button" className="h-10" onClick={openCreate}>
-            Add category
+          <Button type="button" onClick={openCreate}>
+            <Plus data-icon="inline-start" />
+            Add track
           </Button>
         }
       />
 
-      {loading ? (
-        <Card className="border border-border bg-white py-8">
-          <CardContent className="text-center text-sm text-muted-foreground">
-            Loading…
-          </CardContent>
-        </Card>
-      ) : sorted.length === 0 ? (
-        <EmptyState
-          icon={CategoriesIcon}
-          title="No categories yet"
-          description="Add categories so submitters can choose a track for each abstract."
-          actionLabel="Add category"
-          onAction={openCreate}
-        />
-      ) : (
-        <Card className="border border-border bg-white py-0 ring-0">
-          <CardContent className="px-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Chair</TableHead>
-                  <TableHead className="text-right">Submissions</TableHead>
-                  <TableHead className="w-[120px] text-right">Order</TableHead>
-                  <TableHead className="w-[52px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.map((category, index) => {
-                  const chair = category.chairUserId
-                    ? chairByUserId.get(category.chairUserId)
-                    : undefined;
-                  const submissionCount = 0;
-                  // TODO: wire to GET /api/... submissions by category when Module 2 lands
+      <DataTable
+        caption="Tracks"
+        columns={columns}
+        rows={sorted}
+        getRowId={(c) => c.id}
+        loading={loading}
+        error={loadError}
+        onRetry={() => {
+          setLoading(true);
+          void load();
+        }}
+        empty={{
+          icon: CategoriesIcon,
+          title: "No tracks yet",
+          description: "Add tracks such as Trauma, Spine or Paediatric Orthopaedics so authors can choose where their abstract fits.",
+          action: (
+            <Button onClick={openCreate}>
+              <Plus data-icon="inline-start" />
+              Add track
+            </Button>
+          ),
+        }}
+        rowActions={(category) => {
+          const index = sorted.indexOf(category);
+          const busy = reorderLoadingId === category.id;
+          return (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={index === 0 || busy}
+                aria-label={`Move ${category.name} up`}
+                onClick={() => void moveCategory(category, "up")}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <ArrowUp />}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={index === sorted.length - 1 || busy}
+                aria-label={`Move ${category.name} down`}
+                onClick={() => void moveCategory(category, "down")}
+              >
+                <ArrowDown />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${category.name}`}>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => openEdit(category)}>
+                    <Pencil />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(category)}>
+                    <Trash2 />
+                    Delete…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          );
+        }}
+      />
 
-                  return (
-                    <TableRow key={category.id}>
-                      <TableCell className="font-medium">
-                        {category.name}
-                      </TableCell>
-                      <TableCell>
-                        {chair ? (
-                          <span className="inline-flex items-center gap-2">
-                            <Avatar className="size-7">
-                              <AvatarFallback className="text-[10px]">
-                                {initials(chair)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm">{displayName(chair)}</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">Unassigned</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {submissionCount}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-9"
-                            disabled={
-                              index === 0 || reorderLoadingId === category.id
-                            }
-                            aria-label="Move up"
-                            onClick={() => void moveCategory(category, "up")}
-                          >
-                            <ArrowUp className="size-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-9"
-                            disabled={
-                              index === sorted.length - 1 ||
-                              reorderLoadingId === category.id
-                            }
-                            aria-label="Move down"
-                            onClick={() => void moveCategory(category, "down")}
-                          >
-                            <ArrowDown className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-9"
-                              aria-label={`Actions for ${category.name}`}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => openEdit(category)}>
-                              <Pencil />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onSelect={() => setDeleteTarget(category)}
-                            >
-                              <Trash2 />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>
-              {editing ? "Edit category" : "Add category"}
-            </SheetTitle>
-            <SheetDescription>
-              Name the track and optionally assign a chair from event admins or
-              track chairs.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-col gap-4 px-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="category-name">
-                Name <span className="text-muted-foreground">*</span>
-              </Label>
-              <Input
-                id="category-name"
-                className="h-10"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="category-chair">Chair</Label>
+      <SidePanel
+        open={sheetOpen}
+        onOpenChange={(o) => (saveLoading ? null : setSheetOpen(o))}
+        title={editing ? "Edit track" : "Add track"}
+        description="Name the track and choose its chair. Chairs come from the event's admins and track chairs."
+        footer={
+          <>
+            <Button variant="outline" disabled={saveLoading} onClick={() => setSheetOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={saveLoading} onClick={() => void saveCategory()}>
+              {saveLoading ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+              {saveLoading ? "Saving…" : editing ? "Save track" : "Add track"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-5">
+          <FormField label="Track name" required error={nameError} help="e.g. Trauma & Emergency Orthopaedics">
+            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </FormField>
+          <FormField
+            label="Track chair"
+            optional
+            help={
+              chairRoles.length === 0
+                ? "No one can be chosen yet. Invite a track chair from Members first."
+                : "Chairs assign reviewers and recommend decisions for this track."
+            }
+          >
+            {(p) => (
               <Select value={chairUserId} onValueChange={setChairUserId}>
-                <SelectTrigger id="category-chair" className="h-10">
-                  <SelectValue placeholder="Select chair" />
+                <SelectTrigger {...p} className="w-full">
+                  <SelectValue placeholder="Choose a chair" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No chair</SelectItem>
+                  <SelectItem value="none">No chair yet</SelectItem>
                   {chairRoles.map((role) => (
                     <SelectItem key={role.userId} value={role.userId}>
-                      {displayName(role)} ({role.role.replace("_", " ")})
+                      {displayName(role)} · {role.role === "EVENT_ADMIN" ? "Event admin" : "Track chair"}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-          <SheetFooter className="gap-2 sm:gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10"
-              disabled={saveLoading}
-              onClick={() => setSheetOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="h-10"
-              disabled={saveLoading}
-              onClick={() => void saveCategory()}
-            >
-              {saveLoading ? "Saving…" : editing ? "Save changes" : "Create"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+            )}
+          </FormField>
+        </div>
+      </SidePanel>
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-        title="Delete category?"
+        title="Delete this track?"
         description={
           deleteTarget
-            ? `“${deleteTarget.name}” will be removed. Existing submissions are not handled until Module 2.`
-            : "This category will be deleted."
+            ? `“${deleteTarget.name}” will no longer be offered to authors, and abstracts already in it will be left without a track. You can't undo this.`
+            : "This track will be deleted."
         }
-        confirmLabel="Delete"
+        confirmLabel="Delete track"
         destructive
         loading={deleteLoading}
         onConfirm={confirmDelete}

@@ -149,8 +149,8 @@ export function navFor(role: ViewRole, p: EventPaths): NavGroup[] {
           id: "programme",
           label: "Programme setup",
           items: [
-            { id: "setup", label: "Event details", shortLabel: "Setup", href: `${p.admin}/setup`, icon: SlidersHorizontal, primary: true },
-            { id: "categories", label: "Categories", href: `${p.admin}/categories`, icon: Tags },
+            { id: "setup", label: "Event setup", shortLabel: "Setup", href: `${p.admin}/setup`, icon: SlidersHorizontal, primary: true },
+            { id: "categories", label: "Tracks and chairs", href: `${p.admin}/categories`, icon: Tags },
             { id: "submission-types", label: "Submission types", href: `${p.admin}/submission-types`, icon: FileText },
             { id: "eligibility", label: "Eligibility", href: `${p.admin}/eligibility`, icon: ShieldCheck },
           ],

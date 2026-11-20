@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
-import { toast } from "sonner";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { FileUpload } from "@/components/shared/file-upload";
+import { FormSection } from "@/components/shared/form-section";
+import { toast } from "@/components/shared/toast";
 import { GuidelinesEditor } from "@/components/setup/guidelines-editor";
-import { PublicPagePreview } from "@/components/setup/public-page-preview";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api/client";
 import type { EventDto } from "@/lib/types/api";
 
@@ -35,6 +36,8 @@ export function PublicPageForm({
   const [saving, setSaving] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedHtml, setSavedHtml] = useState(initialEvent.guidelinesRichText ?? "");
+  const router = useRouter();
 
   async function copyUrl() {
     const url =
@@ -44,10 +47,10 @@ export function PublicPageForm({
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success("Public URL copied");
+      toast.success("Link copied");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Could not copy");
+      toast.error("Couldn't copy the link", { description: "Select the address and copy it instead." });
     }
   }
 
@@ -62,10 +65,12 @@ export function PublicPageForm({
         },
       );
       if (!result.ok) {
-        toast.error(result.error.message || "Could not save");
+        toast.error("Couldn't save the guidelines", { description: result.error.message });
         return;
       }
-      toast.success("Guidelines saved");
+      toast.success("Guidelines published");
+      setSavedHtml(richText);
+      router.refresh();
     } finally {
       setSaving(false);
     }
@@ -82,79 +87,87 @@ export function PublicPageForm({
         { method: "POST", formData },
       );
       if (!result.ok) {
-        toast.error(result.error.message || "Upload failed");
+        toast.error("Couldn't upload the PDF", { description: result.error.message });
         return;
       }
       toast.success("Guidelines PDF uploaded");
+      router.refresh();
       setPdfUrl(URL.createObjectURL(file));
     } finally {
       setUploadingPdf(false);
     }
   }
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="space-y-4">
-        <div className="flex flex-col gap-2">
-          <Label>Public URL</Label>
-          <div className="flex gap-2">
-            <Input readOnly value={publicPath} className="h-10 font-mono text-xs" />
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 shrink-0"
-              onClick={() => void copyUrl()}
-            >
-              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              <span className="sr-only">Copy</span>
-            </Button>
-          </div>
-        </div>
+  const dirty = richText !== savedHtml;
 
-        <div className="flex flex-col gap-2">
-          <Label>Guidelines (rich text)</Label>
-          <GuidelinesEditor value={richText} onChange={setRichText} />
-          <Button
-            type="button"
-            className="h-10 w-fit"
-            disabled={saving}
-            onClick={() => void saveGuidelines()}
-          >
-            {saving ? "Saving…" : "Save guidelines"}
+  return (
+    <div className="space-y-6">
+      <FormSection title="Public page" description="Share this link in your call for abstracts.">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <code className="flex min-h-control min-w-0 flex-1 items-center overflow-x-auto rounded-md border border-border bg-muted px-3 font-mono text-sm whitespace-nowrap">
+            {publicPath}
+          </code>
+          <Button type="button" variant="outline" onClick={() => void copyUrl()}>
+            {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+            {copied ? "Copied" : "Copy link"}
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={publicPath} target="_blank">
+              <ExternalLink data-icon="inline-start" />
+              Open
+            </Link>
           </Button>
         </div>
+      </FormSection>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="guidelines-pdf">Guidelines PDF</Label>
-          <Input
-            id="guidelines-pdf"
-            type="file"
-            accept="application/pdf"
-            className="h-10"
-            disabled={uploadingPdf}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void onPdfChange(file);
-            }}
-          />
-          {pdfUrl ? (
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-primary hover:underline"
-            >
-              View guidelines PDF
-            </a>
-          ) : null}
-        </div>
-      </div>
+      <FormSection
+        title="Author guidelines"
+        description="Formatting rules, word limits and what to include. Shown under “Call for abstracts” on the public page."
+        footer={
+          <>
+            <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => setRichText(savedHtml)}>
+              Discard
+            </Button>
+            <Button type="button" disabled={saving || !dirty} onClick={() => void saveGuidelines()}>
+              {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+              {saving ? "Publishing…" : "Publish guidelines"}
+            </Button>
+          </>
+        }
+      >
+        <GuidelinesEditor value={richText} onChange={setRichText} />
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {dirty ? "You have unpublished changes." : "The public page shows this version."}
+        </p>
+      </FormSection>
 
-      <PublicPagePreview
-        eventName={initialEvent.name}
-        edition={initialEvent.edition}
-        guidelinesHtml={richText}
-      />
+      <FormSection title="Guidelines PDF" description="Optional. Authors can download it from the public page.">
+        <FileUpload
+          label="Guidelines PDF"
+          accept="application/pdf"
+          acceptLabel="PDF"
+          maxSizeMb={5}
+          uploading={uploadingPdf}
+          value={pdfUrl ? { name: "Author guidelines.pdf", size: 0, url: pdfUrl } : null}
+          onSelect={(file) => void onPdfChange(file)}
+        />
+        {pdfUrl ? (
+          <label className="inline-flex min-h-control w-fit cursor-pointer items-center rounded-md border border-border px-4 text-base font-medium hover:bg-muted">
+            Replace PDF
+            <input
+              type="file"
+              accept="application/pdf"
+              className="sr-only"
+              disabled={uploadingPdf}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onPdfChange(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        ) : null}
+      </FormSection>
     </div>
   );
 }

@@ -4,11 +4,16 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { DateDrivenStateChip } from "@/components/shared/date-driven-state-chip";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { KeyDates as KeyDatesTimeline } from "@/components/event-page/key-dates";
+import { FormField } from "@/components/shared/form-field";
+import { FormSection } from "@/components/shared/form-section";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { toast } from "@/components/shared/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useNow } from "@/lib/hooks/use-now";
 import { apiFetch } from "@/lib/api/client";
 import {
   fromDatetimeLocalValue,
@@ -17,13 +22,13 @@ import {
 import { derivePortalState } from "@/lib/services/events/portal-state";
 import type { KeyDates } from "@/lib/types/api";
 
-const FIELDS: Array<{ key: keyof KeyDates; label: string }> = [
-  { key: "submissionOpenAt", label: "Submission open" },
-  { key: "submissionCloseAt", label: "Submission close" },
-  { key: "reviewDeadlineAt", label: "Review deadline" },
-  { key: "notificationAt", label: "Author notification" },
-  { key: "earlyBirdEndAt", label: "Early-bird end" },
-  { key: "registrationCloseAt", label: "Registration close" },
+const FIELDS: Array<{ key: keyof KeyDates; label: string; help: string }> = [
+  { key: "submissionOpenAt", label: "Submissions open", help: "Authors can start submitting from this moment." },
+  { key: "submissionCloseAt", label: "Submission deadline", help: "The Submit button closes. Drafts stay saved." },
+  { key: "reviewDeadlineAt", label: "Reviews due", help: "Reviewers should finish scoring by now." },
+  { key: "notificationAt", label: "Decisions announced", help: "Authors hear whether they're accepted." },
+  { key: "earlyBirdEndAt", label: "Early-bird registration ends", help: "Early-bird ticket prices stop." },
+  { key: "registrationCloseAt", label: "Registration closes", help: "No more registrations after this." },
 ];
 
 const keyDatesFormSchema = z
@@ -41,7 +46,7 @@ const keyDatesFormSchema = z
     if (open && close && close < open) {
       ctx.addIssue({
         code: "custom",
-        message: "Close must be on or after open",
+        message: "The deadline must be on or after the day submissions open.",
         path: ["submissionCloseAt"],
       });
     }
@@ -49,7 +54,7 @@ const keyDatesFormSchema = z
     if (close && review && review < close) {
       ctx.addIssue({
         code: "custom",
-        message: "Review deadline should be after submission close",
+        message: "Reviews are due after the submission deadline.",
         path: ["reviewDeadlineAt"],
       });
     }
@@ -57,7 +62,7 @@ const keyDatesFormSchema = z
     if (review && notify && notify < review) {
       ctx.addIssue({
         code: "custom",
-        message: "Notification should be on or after review deadline",
+        message: "Decisions go out on or after the review deadline.",
         path: ["notificationAt"],
       });
     }
@@ -118,6 +123,8 @@ export function KeyDatesForm({
   initialKeyDates: KeyDates;
 }) {
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
+  const now = useNow();
   const form = useForm<FormValues>({
     resolver: zodResolver(keyDatesFormSchema),
     defaultValues: keyDatesToForm(initialKeyDates),
@@ -138,67 +145,79 @@ export function KeyDatesForm({
         { method: "PUT", body },
       );
       if (!result.ok) {
-        toast.error(result.error.message || "Could not save");
+        toast.error("Couldn't save the key dates", { description: result.error.message });
         return;
       }
       toast.success("Key dates saved");
       form.reset(keyDatesToForm(result.data));
+      router.refresh();
     } finally {
       setSaving(false);
     }
   }
 
+  const errors = form.formState.errors;
+  const dirty = form.formState.isDirty;
+  const preview = formToKeyDatesBody(watched);
+
+  const states: Array<{ label: string; on: boolean; onLabel: string; offLabel: string }> = [
+    { label: "Submissions", on: portalState.submissionOpen, onLabel: "Submissions open", offLabel: "Submissions closed" },
+    { label: "Reviews", on: portalState.reviewOpen, onLabel: "Reviewing open", offLabel: "Reviewing closed" },
+    { label: "Early-bird", on: portalState.earlyBirdActive, onLabel: "Early-bird on", offLabel: "Early-bird over" },
+    { label: "Registration", on: portalState.registrationOpen, onLabel: "Registration open", offLabel: "Registration closed" },
+  ];
+
   return (
-    <form className="max-w-xl space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
-      <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-surface p-4">
-        <DateDrivenStateChip
-          label="Submissions"
-          active={portalState.submissionOpen}
-          activeLabel="OPEN"
-          inactiveLabel="CLOSED"
-        />
-        <DateDrivenStateChip
-          label="Reviews"
-          active={portalState.reviewOpen}
-          activeLabel="OPEN"
-          inactiveLabel="CLOSED"
-        />
-        <DateDrivenStateChip
-          label="Early-bird"
-          active={portalState.earlyBirdActive}
-          activeLabel="ACTIVE"
-          inactiveLabel="ENDED"
-        />
-        <DateDrivenStateChip
-          label="Registration"
-          active={portalState.registrationOpen}
-          activeLabel="OPEN"
-          inactiveLabel="CLOSED"
-        />
-      </div>
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <form className="min-w-0 space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        <FormSection
+          title="Key dates"
+          description="Each date switches the portal automatically. All times are Sri Lanka time (Asia/Colombo)."
+          aside={
+            <div className="flex flex-wrap gap-1.5" aria-label="Portal right now, with these dates">
+              {states.map((st) => (
+                <StatusBadge key={st.label} status={st.on ? "open" : "closed"} label={st.on ? st.onLabel : st.offLabel} size="sm" />
+              ))}
+            </div>
+          }
+        >
+          <ol className="grid gap-6">
+            {FIELDS.map((field, i) => (
+              <li key={field.key} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+                <span
+                  aria-hidden
+                  className="mt-1 flex size-8 items-center justify-center rounded-full border border-border bg-muted text-sm font-semibold tabular-nums text-muted-foreground"
+                >
+                  {i + 1}
+                </span>
+                <FormField label={field.label} help={field.help} error={errors[field.key]?.message}>
+                  <Input type="datetime-local" className="sm:max-w-xs" {...form.register(field.key)} />
+                </FormField>
+              </li>
+            ))}
+          </ol>
+        </FormSection>
 
-      <div className="grid gap-4">
-        {FIELDS.map((field) => (
-          <div key={field.key} className="flex flex-col gap-2">
-            <Label htmlFor={field.key}>{field.label}</Label>
-            <Input
-              id={field.key}
-              type="datetime-local"
-              className="h-10"
-              {...form.register(field.key)}
-            />
-            {form.formState.errors[field.key] ? (
-              <p className="text-xs text-destructive">
-                {form.formState.errors[field.key]?.message}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </div>
+        <div className="sticky bottom-0 z-10 -mx-gutter flex flex-col-reverse gap-2 border-t border-border bg-background/95 px-gutter py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-end md:mx-0 md:rounded-lg md:border md:px-4">
+          <p className="text-sm text-muted-foreground sm:mr-auto" aria-live="polite">
+            {dirty ? "You have unsaved changes." : "All changes saved."}
+          </p>
+          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => form.reset()}>
+            Discard
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+            {saving ? "Saving…" : "Save key dates"}
+          </Button>
+        </div>
+      </form>
 
-      <Button type="submit" className="h-10" disabled={saving}>
-        {saving ? "Saving…" : "Save key dates"}
-      </Button>
-    </form>
+      <aside className="min-w-0">
+        <div className="rounded-lg border border-border bg-card p-4 md:p-5 xl:sticky xl:top-24">
+          <h3 className="mb-4 text-lg font-semibold">How authors will see it</h3>
+          {now ? <KeyDatesTimeline keyDates={preview} now={now.toISOString()} /> : null}
+        </div>
+      </aside>
+    </div>
   );
 }

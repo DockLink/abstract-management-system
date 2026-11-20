@@ -1,17 +1,22 @@
 "use client";
 
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BasicsForm } from "@/components/setup/basics-form";
 import { KeyDatesForm } from "@/components/setup/key-dates-form";
 import { PublicPageForm } from "@/components/setup/public-page-form";
 import type { EventDto, KeyDates } from "@/lib/types/api";
 
+export type SetupTab = "basics" | "public" | "dates";
+
+const LABELS: Record<SetupTab, string> = {
+  basics: "Details and logo",
+  public: "Guidelines",
+  dates: "Key dates",
+};
+
 export function SetupTabs({
+  initialTab,
   orgId,
   eventId,
   orgSlug,
@@ -21,6 +26,7 @@ export function SetupTabs({
   bannerUrl,
   guidelinesPdfUrl,
 }: {
+  initialTab: SetupTab;
   orgId: string;
   eventId: string;
   orgSlug: string;
@@ -31,13 +37,30 @@ export function SetupTabs({
   guidelinesPdfUrl: string | null;
 }) {
   const keyDates: KeyDates = event.keyDates;
+  const [tab, setTab] = useState<SetupTab>(initialTab);
+  // Follow checklist links (?tab=…) that change the prop without remounting.
+  const [lastInitial, setLastInitial] = useState(initialTab);
+  if (initialTab !== lastInitial) {
+    setLastInitial(initialTab);
+    setTab(initialTab);
+  }
+
+  const change = (value: string) => {
+    const next = value as SetupTab;
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url);
+  };
 
   return (
-    <Tabs defaultValue="basics" className="w-full">
-      <TabsList className="mb-6 h-10 w-full justify-start sm:w-auto">
-        <TabsTrigger value="basics">Basics</TabsTrigger>
-        <TabsTrigger value="public">Public page</TabsTrigger>
-        <TabsTrigger value="dates">Key dates</TabsTrigger>
+    <Tabs value={tab} onValueChange={change} className="w-full" id="setup-forms">
+      <TabsList className="mb-2 h-auto w-full max-w-full justify-start overflow-x-auto sm:w-auto">
+        {(Object.keys(LABELS) as SetupTab[]).map((t) => (
+          <TabsTrigger key={t} value={t} className="min-h-control-sm px-4">
+            {LABELS[t]}
+          </TabsTrigger>
+        ))}
       </TabsList>
       <TabsContent value="basics">
         <BasicsForm
@@ -59,11 +82,7 @@ export function SetupTabs({
         />
       </TabsContent>
       <TabsContent value="dates">
-        <KeyDatesForm
-          orgId={orgId}
-          eventId={eventId}
-          initialKeyDates={keyDates}
-        />
+        <KeyDatesForm orgId={orgId} eventId={eventId} initialKeyDates={keyDates} />
       </TabsContent>
     </Tabs>
   );
