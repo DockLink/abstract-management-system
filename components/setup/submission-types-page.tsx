@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FormBuilderDialog } from "@/components/setup/form-builder-dialog";
-import { Layers, Loader2, Pencil, ShieldCheck } from "lucide-react";
+import { Layers, Loader2, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { FormField } from "@/components/shared/form-field";
@@ -38,6 +39,22 @@ function parseSections(
     .map((s) => ({ key: s.key, label: s.label }));
 }
 
+const PRESENTATION_CODES = [
+  { code: "ORAL", label: "Oral" },
+  { code: "POSTER", label: "Poster" },
+  { code: "ORAL_OR_POSTER", label: "Oral or poster" },
+] as const;
+
+type PresentationDraft = { code: string; label: string; isActive: boolean };
+
+/** All three formats, in order, including any this event has no row for yet. */
+function toPresentationDraft(types: PresentationTypeDto[]): PresentationDraft[] {
+  return PRESENTATION_CODES.map(({ code, label }) => {
+    const row = types.find((t) => t.code === code);
+    return { code, label: row?.label ?? label, isActive: row?.isActive ?? false };
+  });
+}
+
 export function SubmissionTypesPage({
   orgId,
   eventId,
@@ -62,6 +79,11 @@ export function SubmissionTypesPage({
   const [saveLoading, setSaveLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; wordLimit?: string }>({});
+  const [deleteTarget, setDeleteTarget] = useState<SubmissionTypeDto | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [presentationDraft, setPresentationDraft] = useState<PresentationDraft[]>(() => toPresentationDraft([]));
+  const [presentationError, setPresentationError] = useState<string | null>(null);
+  const [presentationSaving, setPresentationSaving] = useState(false);
 
   const load = useCallback(async () => {
     const [typesRes, presRes] = await Promise.all([
@@ -76,8 +98,10 @@ export function SubmissionTypesPage({
       setLoadError(typesRes.error.message || "The submission types couldn't be loaded.");
     }
 
-    if (presRes.ok) setPresentationTypes(presRes.data);
-    else toast.error("Couldn't load presentation types", { description: presRes.error.message });
+    if (presRes.ok) {
+      setPresentationTypes(presRes.data);
+      setPresentationDraft(toPresentationDraft(presRes.data));
+    } else toast.error("Couldn't load presentation types", { description: presRes.error.message });
 
     setLoading(false);
   }, [base]);
@@ -95,8 +119,69 @@ export function SubmissionTypesPage({
     setEditOpen(true);
   }
 
+  function openCreate() {
+    setEditing(null);
+    setName("");
+    setWordLimit("300");
+    setRequiresErc(false);
+    setFieldErrors({});
+    setEditOpen(true);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const result = await apiFetch(`${base}/submission-types/${deleteTarget.id}`, { method: "DELETE" });
+      if (!result.ok) {
+        toast.error("Couldn't delete this type", { description: result.error.message });
+        setDeleteTarget(null);
+        return;
+      }
+      toast.success("Submission type deleted");
+      setDeleteTarget(null);
+      await load();
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  async function savePresentationTypes() {
+    if (presentationDraft.some((p) => !p.label.trim())) {
+      setPresentationError("Give every format a name.");
+      return;
+    }
+    if (!presentationDraft.some((p) => p.isActive)) {
+      setPresentationError("Keep at least one format on.");
+      return;
+    }
+    setPresentationError(null);
+    setPresentationSaving(true);
+    try {
+      const result = await apiFetch<PresentationTypeDto[]>(`${base}/presentation-types`, {
+        method: "PUT",
+        body: {
+          types: presentationDraft.map((p, sortOrder) => ({
+            code: p.code,
+            label: p.label.trim(),
+            isActive: p.isActive,
+            sortOrder,
+          })),
+        },
+      });
+      if (!result.ok) {
+        toast.error("Couldn't save presentation types", { description: result.error.message });
+        return;
+      }
+      setPresentationTypes(result.data);
+      setPresentationDraft(toPresentationDraft(result.data));
+      toast.success("Presentation types saved");
+    } finally {
+      setPresentationSaving(false);
+    }
+  }
+
   async function saveType() {
-    if (!editing) return;
     const trimmed = name.trim();
     const limit = Number.parseInt(wordLimit, 10);
     const errors: { name?: string; wordLimit?: string } = {};
@@ -107,22 +192,25 @@ export function SubmissionTypesPage({
 
     setSaveLoading(true);
     try {
-      const result = await apiFetch<SubmissionTypeDto>(
-        `${base}/submission-types/${editing.id}`,
-        {
-          method: "PATCH",
-          body: {
-            name: trimmed,
-            wordLimit: limit,
-            requiresErc,
-          },
-        },
-      );
+      const result = editing
+        ? await apiFetch<SubmissionTypeDto>(`${base}/submission-types/${editing.id}`, {
+            method: "PATCH",
+            body: { name: trimmed, wordLimit: limit, requiresErc },
+          })
+        : await apiFetch<SubmissionTypeDto>(`${base}/submission-types`, {
+            method: "POST",
+            body: {
+              name: trimmed,
+              wordLimit: limit,
+              requiresErc,
+              sortOrder: types.reduce((max, t) => Math.max(max, t.sortOrder), -1) + 1,
+            },
+          });
       if (!result.ok) {
         toast.error("Couldn't save the submission type", { description: result.error.message });
         return;
       }
-      toast.success("Submission type saved");
+      toast.success(editing ? "Submission type saved" : "Submission type added");
       setEditOpen(false);
       await load();
     } finally {
@@ -130,13 +218,22 @@ export function SubmissionTypesPage({
     }
   }
 
-  const activePresentation = presentationTypes.filter((p) => p.isActive);
+  const presentationDirty =
+    JSON.stringify(presentationDraft) !== JSON.stringify(toPresentationDraft(presentationTypes));
+
+  const addTypeButton = (
+    <Button type="button" onClick={openCreate}>
+      <Plus data-icon="inline-start" />
+      Add type
+    </Button>
+  );
 
   return (
     <div>
       <PageHeader
         title="Submission types"
         description="Each type has its own form and word limit. Authors pick one when they submit."
+        actions={addTypeButton}
       />
 
       {loading ? (
@@ -154,7 +251,8 @@ export function SubmissionTypesPage({
         <EmptyState
           icon={TypesIcon}
           title="No submission types yet"
-          description="New events start with the standard types. If none appear, clone a previous event to copy its types and forms."
+          description="Add the types authors can submit, such as Original research or Case report."
+          action={addTypeButton}
         />
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
@@ -177,10 +275,21 @@ export function SubmissionTypesPage({
                       ) : null}
                     </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => openEdit(type)}>
-                    <Pencil data-icon="inline-start" />
-                    Edit<span className="sr-only"> {type.name}</span>
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => openEdit(type)}>
+                      <Pencil data-icon="inline-start" />
+                      Edit<span className="sr-only"> {type.name}</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${type.name}`}
+                      onClick={() => setDeleteTarget(type)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex-1 border-t border-border px-4 py-4 md:px-5">
                   <p className="mb-2 text-sm text-muted-foreground">
@@ -215,27 +324,52 @@ export function SubmissionTypesPage({
           Presentation types
         </h2>
         <p className="mt-1 max-w-[65ch] text-base text-muted-foreground">
-          The formats you can accept abstracts for. They&apos;re fixed for now and used when decisions are made.
+          The formats authors can ask for. Turning one off hides it for new choices; existing abstracts keep theirs.
         </p>
-        {activePresentation.length === 0 ? (
-          <p className="mt-4 text-base text-warning-foreground">None active for this event.</p>
-        ) : (
-          <ul className="mt-4 grid gap-2 sm:grid-cols-3">
-            {activePresentation.map((ptype) => (
-              <li key={ptype.id} className="flex min-h-control items-center gap-3 rounded-md border border-border bg-card px-4 py-3 text-base">
-                <span aria-hidden className="size-2 rounded-full bg-primary" />
-                {ptype.label}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="mt-4 grid gap-3">
+          {presentationDraft.map((ptype, index) => (
+            <li key={ptype.code} className="flex items-center gap-3 rounded-md border border-border bg-card p-3">
+              <Input
+                aria-label={`Name for ${PRESENTATION_CODES[index]!.label} format`}
+                value={ptype.label}
+                maxLength={100}
+                onChange={(e) =>
+                  setPresentationDraft((draft) =>
+                    draft.map((p, i) => (i === index ? { ...p, label: e.target.value } : p)),
+                  )
+                }
+              />
+              <Switch
+                aria-label={`${ptype.label || PRESENTATION_CODES[index]!.label} offered to authors`}
+                checked={ptype.isActive}
+                onCheckedChange={(isActive) =>
+                  setPresentationDraft((draft) =>
+                    draft.map((p, i) => (i === index ? { ...p, isActive } : p)),
+                  )
+                }
+              />
+            </li>
+          ))}
+        </ul>
+        {presentationError ? (
+          <p role="alert" className="mt-3 text-sm font-medium text-danger-foreground">{presentationError}</p>
+        ) : null}
+        <Button
+          type="button"
+          className="mt-4 w-full sm:w-auto"
+          disabled={presentationSaving || !presentationDirty}
+          onClick={() => void savePresentationTypes()}
+        >
+          {presentationSaving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+          {presentationSaving ? "Saving…" : "Save presentation types"}
+        </Button>
       </section>
 
       <SidePanel
         open={editOpen}
         onOpenChange={(o) => (saveLoading ? null : setEditOpen(o))}
-        title={editing ? `Edit ${editing.name}` : "Edit submission type"}
-        description="Name, word limit and ethics requirement. Change sections in the form builder."
+        title={editing ? `Edit ${editing.name}` : "Add submission type"}
+        description={editing ? "Name, word limit and ethics requirement. Change sections in the form builder." : "New types start with the standard IMRaD sections. Change them in the form builder."}
         footer={
           <>
             <Button variant="outline" disabled={saveLoading} onClick={() => setEditOpen(false)}>
@@ -243,7 +377,7 @@ export function SubmissionTypesPage({
             </Button>
             <Button disabled={saveLoading} onClick={() => void saveType()}>
               {saveLoading ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
-              {saveLoading ? "Saving…" : "Save submission type"}
+              {saveLoading ? "Saving…" : editing ? "Save submission type" : "Add submission type"}
             </Button>
           </>
         }
@@ -264,6 +398,23 @@ export function SubmissionTypesPage({
           </div>
         </div>
       </SidePanel>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Delete this submission type?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.name}” and its form will be deleted. Types that already have submissions can't be deleted.`
+            : "This type will be deleted."
+        }
+        confirmLabel="Delete type"
+        destructive
+        loading={deleteLoading}
+        onConfirm={confirmDelete}
+      />
 
       <FormBuilderDialog
         open={!!builderType}

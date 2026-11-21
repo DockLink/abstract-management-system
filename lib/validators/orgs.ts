@@ -6,9 +6,14 @@ export const slugSchema = z
   .max(80)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase kebab-case");
 
+/** Top-level app routes: an org with one of these slugs would be unreachable. */
+const RESERVED_ORG_SLUGS = new Set([
+  "api", "api-docs", "auth", "dev", "login", "my-reviews", "org", "platform", "swagger-ui",
+]);
+
 export const createOrgSchema = z.object({
   name: z.string().min(1).max(200),
-  slug: slugSchema,
+  slug: slugSchema.refine((slug) => !RESERVED_ORG_SLUGS.has(slug), "This web address is reserved"),
   address: z.string().max(500).optional().nullable(),
 });
 

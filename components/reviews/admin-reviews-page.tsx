@@ -48,6 +48,8 @@ import {
   Plus,
   Trash2,
   Edit,
+  ArrowUp,
+  ArrowDown,
   Shuffle,
   Loader2,
   Bell,
@@ -104,6 +106,14 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
   const [certModalOpen, setCertModalOpen] = useState(false);
   const [selectedReviewerId, setSelectedReviewerId] = useState<string | null>(null);
   const [selectedReviewerName, setSelectedReviewerName] = useState<string | null>(null);
+
+  // Edit reviewer modal
+  const [editingReviewer, setEditingReviewer] = useState<ReviewerItem | null>(null);
+  const [editReviewerCategories, setEditReviewerCategories] = useState<string[]>([]);
+  const [editReviewerMaxLoad, setEditReviewerMaxLoad] = useState("20");
+  const [editReviewerError, setEditReviewerError] = useState<string | null>(null);
+  const [savingReviewer, setSavingReviewer] = useState(false);
+  const [reorderingRubric, setReorderingRubric] = useState(false);
 
   // Rubric criterion modal
   const [criterionModalOpen, setCriterionModalOpen] = useState(false);
@@ -315,6 +325,60 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
       void loadProgress();
     } else {
       toast.error(res.error.message || "Failed to remove reviewer");
+    }
+  };
+
+  // Edit Reviewer (REV-01)
+  const openEditReviewer = (reviewer: ReviewerItem) => {
+    setEditingReviewer(reviewer);
+    setEditReviewerCategories(reviewer.categoryIds ?? []);
+    setEditReviewerMaxLoad(String(reviewer.maxLoad));
+    setEditReviewerError(null);
+  };
+
+  const handleSaveReviewer = async () => {
+    if (!editingReviewer) return;
+    const maxLoad = Number(editReviewerMaxLoad);
+    if (!Number.isInteger(maxLoad) || maxLoad < 1 || maxLoad > 200) {
+      setEditReviewerError("Enter a whole number from 1 to 200.");
+      return;
+    }
+    setEditReviewerError(null);
+    setSavingReviewer(true);
+    const res = await apiFetch(
+      `/api/v1/orgs/${orgId}/events/${eventId}/reviewers/${editingReviewer.id}`,
+      { method: "PATCH", body: { categoryIds: editReviewerCategories, maxLoad } },
+    );
+    setSavingReviewer(false);
+    if (res.ok) {
+      toast.success("Reviewer updated");
+      setEditingReviewer(null);
+      void loadReviewers();
+      void loadProgress();
+    } else {
+      toast.error(res.error.message || "Failed to update reviewer");
+    }
+  };
+
+  // Reorder Rubric Criteria (REV-04)
+  const handleMoveCriterion = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= rubricCriteria.length) return;
+    const next = [...rubricCriteria];
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    setReorderingRubric(true);
+    const res = await apiFetch(
+      `/api/v1/orgs/${orgId}/events/${eventId}/rubric-criteria/reorder`,
+      {
+        method: "POST",
+        body: { criteria: next.map((c, sortOrder) => ({ id: c.id, sortOrder })) },
+      },
+    );
+    setReorderingRubric(false);
+    if (res.ok) {
+      setRubricCriteria(next);
+    } else {
+      toast.error(res.error.message || "Couldn't change the order");
     }
   };
 
@@ -932,6 +996,15 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => openEditReviewer(r)}
+                            className="h-7 text-xs"
+                            aria-label={`Edit ${r.fullName || r.email}`}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleRemoveReviewer(r.id, r.fullName || r.email)}
                             className="h-7 text-xs text-danger-foreground hover:text-danger-foreground hover:bg-danger-tint"
                           >
@@ -988,7 +1061,7 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                 </p>
               </div>
             ) : (
-              rubricCriteria.map((c) => (
+              rubricCriteria.map((c, index) => (
                 <Card key={c.id} className="border shadow-xs bg-card  flex flex-col justify-between">
                   <CardHeader className="p-4 pb-2">
                     <div className="flex items-start justify-between gap-2">
@@ -1027,6 +1100,24 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
                     </div>
                   </CardContent>
                   <CardContent className="p-4 pt-0 border-t flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={index === 0 || reorderingRubric}
+                      aria-label={`Move ${c.name} up`}
+                      onClick={() => void handleMoveCriterion(index, -1)}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={index === rubricCriteria.length - 1 || reorderingRubric}
+                      aria-label={`Move ${c.name} down`}
+                      onClick={() => void handleMoveCriterion(index, 1)}
+                    >
+                      <ArrowDown />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1416,6 +1507,75 @@ export function AdminReviewsPage({ orgId, eventId, orgSlug, eventSlug }: Props) 
             <Button onClick={handleInviteReviewer} disabled={inviting}>
               {inviting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Send invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── MODAL: Edit Reviewer (REV-01) ─── */}
+      <Dialog
+        open={Boolean(editingReviewer)}
+        onOpenChange={(open) => {
+          if (!open && !savingReviewer) setEditingReviewer(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit reviewer</DialogTitle>
+            <DialogDescription>
+              {editingReviewer?.fullName || editingReviewer?.email}. Changes apply to future assignments; existing ones stay.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Expertise categories</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-48 overflow-y-auto p-2 border rounded-lg">
+                {categories.map((cat) => (
+                  <label key={cat.id} className="flex min-h-control items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editReviewerCategories.includes(cat.id)}
+                      onChange={(e) =>
+                        setEditReviewerCategories(
+                          e.target.checked
+                            ? [...editReviewerCategories, cat.id]
+                            : editReviewerCategories.filter((id) => id !== cat.id),
+                        )
+                      }
+                      className="rounded border-border text-primary"
+                    />
+                    <span className="truncate">{cat.name}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave unchecked if this reviewer can evaluate all categories.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-rev-max">Max capacity load</Label>
+              <Input
+                id="edit-rev-max"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max="200"
+                aria-invalid={editReviewerError ? true : undefined}
+                value={editReviewerMaxLoad}
+                onChange={(e) => setEditReviewerMaxLoad(e.target.value)}
+              />
+              {editReviewerError ? (
+                <p role="alert" className="text-sm font-medium text-danger-foreground">{editReviewerError}</p>
+              ) : null}
+            </div>
+          </div>
+          <DialogFooter className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditingReviewer(null)} disabled={savingReviewer}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSaveReviewer()} disabled={savingReviewer}>
+              {savingReviewer && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save reviewer
             </Button>
           </DialogFooter>
         </DialogContent>

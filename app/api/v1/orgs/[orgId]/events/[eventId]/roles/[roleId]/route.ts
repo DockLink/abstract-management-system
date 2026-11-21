@@ -97,7 +97,30 @@ export async function DELETE(request: Request, context: Ctx) {
     });
     if (!existing) return notFound("Event role not found");
 
-    await prisma.eventRole.delete({ where: { id: roleId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.eventRole.delete({ where: { id: roleId } });
+
+      // Category.chairUserId grants chair access (decisions/access.ts), so it
+      // must not outlive the person's last role that can chair a track.
+      if (
+        existing.role === EventRoleType.TRACK_CHAIR ||
+        existing.role === EventRoleType.EVENT_ADMIN
+      ) {
+        const remaining = await tx.eventRole.count({
+          where: {
+            eventId,
+            userId: existing.userId,
+            role: { in: [EventRoleType.TRACK_CHAIR, EventRoleType.EVENT_ADMIN] },
+          },
+        });
+        if (remaining === 0) {
+          await tx.category.updateMany({
+            where: { eventId, orgId, chairUserId: existing.userId },
+            data: { chairUserId: null },
+          });
+        }
+      }
+    });
 
     await writeAuditLog({
       orgId,

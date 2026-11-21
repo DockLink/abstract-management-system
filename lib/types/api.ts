@@ -74,6 +74,7 @@ export type MeResponse = {
       name: string;
       slug: string;
       edition: string | null;
+      organisation: { name: string; slug: string };
     };
     createdAt: string;
   }>;

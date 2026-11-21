@@ -1,7 +1,7 @@
 import { Prisma } from "@/app/generated/prisma/client";
 import { routeParams } from "@/lib/api/params";
 import { parseBody } from "@/lib/api/validate";
-import { notFound, ok, serverError } from "@/lib/api/response";
+import { conflict, notFound, ok, serverError } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/supabase";
 import { requireEventAdmin } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/prisma";
@@ -106,6 +106,17 @@ export async function DELETE(request: Request, context: Ctx) {
       where: { id: typeId, eventId, orgId },
     });
     if (!existing) return notFound("Submission type not found");
+
+    // The FK cascades, so deleting a used type would destroy its abstracts.
+    // Soft-deleted submissions count: they are kept for the audit trail.
+    const submissionCount = await prisma.submission.count({
+      where: { submissionTypeId: typeId, eventId, orgId },
+    });
+    if (submissionCount > 0) {
+      return conflict(
+        `This type has ${submissionCount} submission${submissionCount === 1 ? "" : "s"} and can't be deleted`,
+      );
+    }
 
     await prisma.submissionType.delete({ where: { id: typeId } });
 

@@ -66,7 +66,9 @@ async function main() {
   const remove = process.argv.includes("--remove");
   const password =
     process.env.SEED_TEST_PASSWORD?.trim() || requireEnv("SEED_ADMIN_PASSWORD");
-  const admin = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY?.trim() || requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const admin = createClient(requireEnv("SUPABASE_URL"), secretKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const prisma = new PrismaClient({

@@ -283,7 +283,7 @@ export function EventShell({
   const showTabs = !!user && tabs.length >= 2 && !taskMode;
 
   const userMenu = (compact: boolean) => (
-    <UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} returnTo={pathname} compact={compact} />
+    <UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} platformAdmin={!!data.viewer?.isPlatformAdmin} returnTo={pathname} compact={compact} />
   );
 
   return (

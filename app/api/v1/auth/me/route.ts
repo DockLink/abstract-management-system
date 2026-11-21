@@ -28,6 +28,7 @@ export async function GET(request: Request) {
               name: true,
               slug: true,
               edition: true,
+              organisation: { select: { name: true, slug: true } },
             },
           },
         },

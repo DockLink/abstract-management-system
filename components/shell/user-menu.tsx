@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck, Loader2, LogIn, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
+import { Building2, ClipboardCheck, Loader2, LogIn, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "@/components/shared/toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -48,11 +48,14 @@ function initials(user: ShellUser) {
 export function UserMenu({
   user,
   reviewsAnywhere = false,
+  platformAdmin = false,
   returnTo,
   compact = false,
 }: {
   user: ShellUser | null;
   reviewsAnywhere?: boolean;
+  /** Shows the link to the platform admin area. */
+  platformAdmin?: boolean;
   /** Path to come back to after signing in. */
   returnTo?: string;
   /** Avatar only (mobile top bar). */
@@ -131,6 +134,12 @@ export function UserMenu({
             <DropdownMenuItem onSelect={() => router.push("/my-reviews")}>
               <ClipboardCheck />
               All my review events
+            </DropdownMenuItem>
+          ) : null}
+          {platformAdmin ? (
+            <DropdownMenuItem onSelect={() => router.push("/platform")}>
+              <Building2 />
+              Platform admin
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />

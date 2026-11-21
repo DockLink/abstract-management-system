@@ -76,7 +76,15 @@ export function CategoriesPage({
   const [nameError, setNameError] = useState<string | null>(null);
 
   const chairRoles = useMemo(
-    () => roles.filter((r) => CHAIR_ROLES.has(r.role)),
+    () => {
+      // Someone can be both event admin and track chair; list them once.
+      const seen = new Set<string>();
+      return roles.filter((r) => {
+        if (!CHAIR_ROLES.has(r.role) || seen.has(r.userId)) return false;
+        seen.add(r.userId);
+        return true;
+      });
+    },
     [roles],
   );
 
@@ -370,7 +378,7 @@ export function CategoriesPage({
             optional
             help={
               chairRoles.length === 0
-                ? "No one can be chosen yet. Invite a track chair from Members first."
+                ? "No one can be chosen yet. Invite a track chair from Team first."
                 : "Chairs assign reviewers and recommend decisions for this track."
             }
           >

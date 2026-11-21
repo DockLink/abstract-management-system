@@ -32,7 +32,8 @@ function createPrisma() {
 
 function createSupabaseAdmin() {
   const url = requireEnv("SUPABASE_URL");
-  const key = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const key =
+    process.env.SUPABASE_SECRET_KEY?.trim() || requireEnv("SUPABASE_SERVICE_ROLE_KEY");
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

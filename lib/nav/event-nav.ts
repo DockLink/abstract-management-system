@@ -26,6 +26,7 @@ import {
   Tags,
   Ticket,
   Users,
+  UsersRound,
 } from "lucide-react";
 
 export type ViewRole =
@@ -160,7 +161,10 @@ export function navFor(role: ViewRole, p: EventPaths): NavGroup[] {
         {
           id: "people",
           label: "People",
-          items: [{ id: "members", label: "Members", href: `${p.admin}/members`, icon: Users }],
+          items: [
+            { id: "team", label: "Team", href: `${p.admin}/team`, icon: UsersRound },
+            { id: "members", label: "Members", href: `${p.admin}/members`, icon: Users },
+          ],
         },
         {
           id: "event",

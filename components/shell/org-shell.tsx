@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, UsersRound } from "lucide-react";
 import { AppShell, AppShellNavLink } from "@/components/shared/app-shell";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -17,6 +17,7 @@ export function OrgShell({ data, children }: { data: OrgShellData; children: Rea
   const [collapsedPref, setCollapsedPref] = useStoredPreference("ams:sidebar-collapsed");
   const collapsed = collapsedPref === "1";
   const eventsHref = `/org/${org.slug}`;
+  const teamHref = `${eventsHref}/team`;
 
   return (
     <AppShell
@@ -24,10 +25,10 @@ export function OrgShell({ data, children }: { data: OrgShellData; children: Rea
       collapsed={collapsed}
       onCollapsedChange={(c) => setCollapsedPref(c ? "1" : null)}
       title={org.name}
-      subtitle="Events"
-      topbar={<Breadcrumbs items={[{ label: org.name, href: eventsHref }, { label: "Events" }]} />}
-      actions={<UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} returnTo={pathname} />}
-      mobileActions={<UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} returnTo={pathname} compact />}
+      subtitle={pathname === teamHref ? "Team" : "Events"}
+      topbar={<Breadcrumbs items={[{ label: org.name, href: eventsHref }, { label: pathname === teamHref ? "Team" : "Events" }]} />}
+      actions={<UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} platformAdmin={data.isPlatformAdmin} returnTo={pathname} />}
+      mobileActions={<UserMenu user={user} reviewsAnywhere={data.reviewsAnywhere} platformAdmin={data.isPlatformAdmin} returnTo={pathname} compact />}
       sidebar={({ closeNav, collapsed: rail }) => (
         <div>
           <div className={cn("border-b border-sidebar-border px-4 py-4", rail && "px-2 text-center")}>
@@ -53,6 +54,18 @@ export function OrgShell({ data, children }: { data: OrgShellData; children: Rea
             >
               Events
             </AppShellNavLink>
+            {data.canManageOrg ? (
+              <AppShellNavLink
+                href={teamHref}
+                active={pathname === teamHref}
+                collapsed={rail}
+                label="Team"
+                icon={<UsersRound className="size-5 shrink-0" aria-hidden />}
+                onClick={closeNav}
+              >
+                Team
+              </AppShellNavLink>
+            ) : null}
           </nav>
         </div>
       )}

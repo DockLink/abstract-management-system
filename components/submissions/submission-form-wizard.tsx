@@ -84,6 +84,33 @@ const PRESENTATION_LABEL: Record<string, string> = {
   either: "Either oral or poster",
 };
 
+const PRESENTATION_VALUE: Record<string, string> = {
+  ORAL: "oral",
+  POSTER: "poster",
+  ORAL_OR_POSTER: "either",
+};
+
+/** Comparable snapshot of one author, without their id or position. */
+function authorKey(a: SubmissionAuthorDto) {
+  return JSON.stringify([a.surname, a.initials, a.email, a.institution, a.designation, a.slmcNo, a.membershipNo, a.affiliationNos, a.isPresenting, a.isCorresponding]);
+}
+
+function authorBody(a: SubmissionAuthorDto, sortOrder: number) {
+  return {
+    surname: a.surname,
+    initials: a.initials,
+    email: a.email,
+    institution: a.institution,
+    designation: a.designation,
+    slmcNo: a.slmcNo,
+    membershipNo: a.membershipNo,
+    affiliationNos: a.affiliationNos,
+    isPresenting: a.isPresenting,
+    isCorresponding: a.isCorresponding,
+    sortOrder,
+  };
+}
+
 /** Comparable snapshot of the people on an abstract (used to sync drafts). */
 function peopleKey(authors: SubmissionAuthorDto[], affiliations: SubmissionAffiliationDto[]) {
   return JSON.stringify({
@@ -112,7 +139,7 @@ export function SubmissionFormWizard({
   // Aux data
   const [submissionTypes, setSubmissionTypes] = useState<SubmissionTypeDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [, setPresentationTypes] = useState<PresentationTypeDto[]>([]);
+  const [presentationTypes, setPresentationTypes] = useState<PresentationTypeDto[]>([]);
   const [formFields, setFormFields] = useState<FormFieldDto[]>([]);
 
   // Submission state
@@ -193,8 +220,14 @@ export function SubmissionFormWizard({
 
   // Server-side state of authors/affiliations on an existing draft
   const syncedPeopleRef = useRef<string>("");
-  const serverAuthorIdsRef = useRef<string[]>([]);
-  const serverAffIdsRef = useRef<string[]>([]);
+  const serverAuthorsRef = useRef<Map<string, string>>(new Map()); // id → authorKey
+  const serverAuthorOrderRef = useRef<string[]>([]);
+  const serverAffsRef = useRef<Map<number, { id: string; text: string }>>(new Map());
+  // Browser-only author ids → their saved ids, so a retry can't add them twice.
+  const savedAuthorIdsRef = useRef<Map<string, string>>(new Map());
+  // Authors sent with the create call whose saved ids we couldn't read back.
+  const unmappedCreateIdsRef = useRef<string[] | null>(null);
+  const syncQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
 
   const base = `/api/v1/orgs/${orgId}/events/${eventId}`;
 
@@ -212,11 +245,45 @@ export function SubmissionFormWizard({
   const maxWords = currentSubmissionType?.wordLimit || 300;
   const isOverWordLimit = totalWordCount > maxWords;
 
+  /** Formats the event offers, plus the one this draft already chose. */
+  const presentationOptions = useMemo(() => {
+    const options = presentationTypes
+      .filter((t) => PRESENTATION_VALUE[t.code] && (t.isActive || PRESENTATION_VALUE[t.code] === preferredPresentation))
+      .map((t) => ({ value: PRESENTATION_VALUE[t.code]!, label: t.label }));
+    if (options.length > 0) return options;
+    return (["oral", "poster", "either"] as const).map((value) => ({ value, label: PRESENTATION_LABEL[value]! }));
+  }, [presentationTypes, preferredPresentation]);
+
+  const presentationLabel =
+    presentationTypes.find((t) => PRESENTATION_VALUE[t.code] === preferredPresentation)?.label ??
+    PRESENTATION_LABEL[preferredPresentation] ??
+    preferredPresentation;
+
   const rememberServerPeople = useCallback((sub: SubmissionDto) => {
-    serverAuthorIdsRef.current = (sub.authors ?? []).map((a) => a.id);
-    serverAffIdsRef.current = (sub.affiliations ?? []).map((f) => f.id);
-    syncedPeopleRef.current = peopleKey(sub.authors ?? [], sub.affiliations ?? []);
+    const saved = [...(sub.authors ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+    serverAuthorsRef.current = new Map(saved.map((a) => [a.id, authorKey(a)]));
+    serverAuthorOrderRef.current = saved.map((a) => a.id);
+    serverAffsRef.current = new Map((sub.affiliations ?? []).map((f) => [f.number, { id: f.id, text: f.text }]));
+    syncedPeopleRef.current = peopleKey(saved, sub.affiliations ?? []);
   }, []);
+
+  /** After a create: record saved ids against the form's temporary ones. */
+  const adoptCreatedPeople = useCallback(
+    (sub: SubmissionDto, localIds: string[]) => {
+      rememberServerPeople(sub);
+      serverAuthorOrderRef.current.forEach((savedId, i) => {
+        const localId = localIds[i];
+        if (localId) savedAuthorIdsRef.current.set(localId, savedId);
+      });
+      setAuthors((current) =>
+        current.map((a) => {
+          const savedId = savedAuthorIdsRef.current.get(a.id);
+          return savedId ? { ...a, id: savedId } : a;
+        }),
+      );
+    },
+    [rememberServerPeople],
+  );
 
   // Load auxiliary data (unchanged)
   useEffect(() => {
@@ -233,7 +300,17 @@ export function SubmissionFormWizard({
           if (!selectedTypeId) setSelectedTypeId(typesRes.data[0]!.id);
         }
         if (catsRes.ok) setCategories(catsRes.data);
-        if (presRes.ok) setPresentationTypes(presRes.data);
+        if (presRes.ok) {
+          setPresentationTypes(presRes.data);
+          // A new abstract must not default to a format the event turned off.
+          if (!existingSubmissionId) {
+            const active = presRes.data
+              .filter((t) => t.isActive)
+              .map((t) => PRESENTATION_VALUE[t.code])
+              .filter((v): v is string => Boolean(v));
+            if (active.length > 0 && !active.includes("either")) setPreferredPresentation(active[0]!);
+          }
+        }
 
         if (existingSubmissionId) {
           const subRes = await apiFetch<SubmissionDto>(`${base}/submissions/${existingSubmissionId}`);
@@ -310,58 +387,112 @@ export function SubmissionFormWizard({
   }, [base, title, submissionId]);
 
   /**
-   * Bring the draft's authors and affiliations in line with the form.
-   * PATCH /submissions/:id ignores authors, so changes made after the draft
-   * was first created were never saved. Uses the existing per-item endpoints;
-   * runs only when the people have changed since the last sync.
+   * Bring the draft's authors and affiliations in line with the form, changing
+   * only what differs so saved authors keep their ids. Saves run one at a time:
+   * autosave and a manual save must not both add the same new author.
    */
-  const syncPeople = useCallback(
+  const runPeopleSync = useCallback(
     async (subId: string) => {
+      if (unmappedCreateIdsRef.current) {
+        const fresh = await apiFetch<SubmissionDto>(`${base}/submissions/${subId}`);
+        if (!fresh.ok) return false;
+        adoptCreatedPeople(fresh.data, unmappedCreateIdsRef.current);
+        unmappedCreateIdsRef.current = null;
+      }
+
       const desired = peopleKey(authors, affiliations);
       if (desired === syncedPeopleRef.current) return true;
 
-      const results = await Promise.all([
-        ...serverAuthorIdsRef.current.map((id) => apiFetch(`${base}/submissions/${subId}/authors/${id}`, { method: "DELETE" })),
-        ...serverAffIdsRef.current.map((id) => apiFetch(`${base}/submissions/${subId}/affiliations/${id}`, { method: "DELETE" })),
-      ]);
-      if (results.some((r) => !r.ok && r.status !== 404)) return false;
+      const resolved = authors.map((a) => ({ ...a, id: savedAuthorIdsRef.current.get(a.id) ?? a.id }));
+      const server = serverAuthorsRef.current;
+      const keepIds = new Set(resolved.map((a) => a.id));
+      let structureChanged = false;
 
-      for (const aff of affiliations.filter((f) => f.text.trim())) {
-        const r = await apiFetch(`${base}/submissions/${subId}/affiliations`, {
+      for (const id of [...server.keys()]) {
+        if (keepIds.has(id)) continue;
+        const r = await apiFetch(`${base}/submissions/${subId}/authors/${id}`, { method: "DELETE" });
+        if (!r.ok && r.status !== 404) return false;
+        server.delete(id);
+        serverAuthorOrderRef.current = serverAuthorOrderRef.current.filter((x) => x !== id);
+        structureChanged = true;
+      }
+
+      const wantedAffs = new Map(
+        affiliations.filter((f) => f.text.trim()).map((f) => [f.number, f.text.trim()]),
+      );
+      for (const [number, aff] of [...serverAffsRef.current]) {
+        if (wantedAffs.has(number)) continue;
+        const r = await apiFetch(`${base}/submissions/${subId}/affiliations/${aff.id}`, { method: "DELETE" });
+        if (!r.ok && r.status !== 404) return false;
+        serverAffsRef.current.delete(number);
+      }
+      for (const [number, text] of wantedAffs) {
+        if (serverAffsRef.current.get(number)?.text === text) continue;
+        // POST upserts on (submission, number), so an edited one keeps its id.
+        const r = await apiFetch<SubmissionAffiliationDto>(`${base}/submissions/${subId}/affiliations`, {
           method: "POST",
-          body: { number: aff.number, text: aff.text.trim() },
+          body: { number, text },
+        });
+        if (!r.ok) return false;
+        serverAffsRef.current.set(number, { id: r.data.id, text });
+      }
+
+      for (const [idx, a] of resolved.entries()) {
+        const key = authorKey(a);
+        if (server.has(a.id)) {
+          if (server.get(a.id) === key) continue;
+          const r = await apiFetch(`${base}/submissions/${subId}/authors/${a.id}`, {
+            method: "PATCH",
+            body: authorBody(a, idx),
+          });
+          if (!r.ok) return false;
+          server.set(a.id, key);
+        } else {
+          const r = await apiFetch<SubmissionAuthorDto>(`${base}/submissions/${subId}/authors`, {
+            method: "POST",
+            body: authorBody(a, idx),
+          });
+          if (!r.ok) return false;
+          savedAuthorIdsRef.current.set(authors[idx]!.id, r.data.id);
+          server.set(r.data.id, key);
+          serverAuthorOrderRef.current = [...serverAuthorOrderRef.current, r.data.id];
+          resolved[idx] = { ...a, id: r.data.id };
+          structureChanged = true;
+        }
+      }
+
+      const orderedIds = resolved.map((a) => a.id);
+      if (
+        orderedIds.length > 0 &&
+        (structureChanged || orderedIds.join() !== serverAuthorOrderRef.current.join())
+      ) {
+        const r = await apiFetch(`${base}/submissions/${subId}/authors/reorder`, {
+          method: "POST",
+          body: { orderedIds },
         });
         if (!r.ok) return false;
       }
-      for (const [idx, a] of authors.entries()) {
-        const r = await apiFetch(`${base}/submissions/${subId}/authors`, {
-          method: "POST",
-          body: {
-            surname: a.surname,
-            initials: a.initials,
-            email: a.email,
-            institution: a.institution,
-            designation: a.designation,
-            slmcNo: a.slmcNo,
-            membershipNo: a.membershipNo,
-            affiliationNos: a.affiliationNos,
-            isPresenting: a.isPresenting,
-            isCorresponding: a.isCorresponding,
-            sortOrder: idx,
-          },
-        });
-        if (!r.ok) return false;
-      }
+      serverAuthorOrderRef.current = orderedIds;
 
-      const fresh = await apiFetch<SubmissionDto>(`${base}/submissions/${subId}`);
-      if (fresh.ok) {
-        serverAuthorIdsRef.current = (fresh.data.authors ?? []).map((a) => a.id);
-        serverAffIdsRef.current = (fresh.data.affiliations ?? []).map((f) => f.id);
-      }
+      setAuthors((current) =>
+        current.map((a) => {
+          const savedId = savedAuthorIdsRef.current.get(a.id);
+          return savedId ? { ...a, id: savedId } : a;
+        }),
+      );
       syncedPeopleRef.current = desired;
       return true;
     },
-    [base, authors, affiliations],
+    [base, authors, affiliations, adoptCreatedPeople],
+  );
+
+  const syncPeople = useCallback(
+    (subId: string) => {
+      const run = syncQueueRef.current.catch(() => false).then(() => runPeopleSync(subId));
+      syncQueueRef.current = run;
+      return run;
+    },
+    [runPeopleSync],
   );
 
   // Save draft (SUB-11) — payloads unchanged; people synced for existing drafts
@@ -418,19 +549,7 @@ export function SubmissionFormWizard({
         } else {
           const createPayload = {
             ...payload,
-            authors: authors.map((a, idx) => ({
-              surname: a.surname,
-              initials: a.initials,
-              email: a.email,
-              institution: a.institution,
-              designation: a.designation,
-              slmcNo: a.slmcNo,
-              membershipNo: a.membershipNo,
-              affiliationNos: a.affiliationNos,
-              isPresenting: a.isPresenting,
-              isCorresponding: a.isCorresponding,
-              sortOrder: idx,
-            })),
+            authors: authors.map((a, idx) => authorBody(a, idx)),
             affiliations: affiliations.map((aff) => ({ number: aff.number, text: aff.text })),
           };
 
@@ -442,7 +561,9 @@ export function SubmissionFormWizard({
           if (res.ok) {
             setSubmissionId(res.data.submission.id);
             const fresh = await apiFetch<SubmissionDto>(`${base}/submissions/${res.data.submission.id}`);
-            if (fresh.ok) rememberServerPeople(fresh.data);
+            const createdIds = authors.map((a) => a.id);
+            if (fresh.ok) adoptCreatedPeople(fresh.data, createdIds);
+            else unmappedCreateIdsRef.current = createdIds;
             setLastSavedAt(new Date());
             setSaveFailed(false);
             if (!silent) toast.success("Draft saved");
@@ -478,7 +599,7 @@ export function SubmissionFormWizard({
       authors,
       affiliations,
       syncPeople,
-      rememberServerPeople,
+      adoptCreatedPeople,
     ],
   );
 
@@ -801,7 +922,7 @@ export function SubmissionFormWizard({
       refNo={refNo}
       typeName={currentSubmissionType?.name ?? ""}
       categoryName={categories.find((c) => c.id === selectedCategoryId)?.name ?? null}
-      presentation={PRESENTATION_LABEL[preferredPresentation] ?? preferredPresentation}
+      presentation={presentationLabel}
       authors={authors}
       affiliations={affiliations}
       sections={sections}
@@ -936,13 +1057,13 @@ export function SubmissionFormWizard({
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-base font-medium">Preferred presentation</legend>
               <RadioGroup value={preferredPresentation} onValueChange={setPreferredPresentation} className="gap-2">
-                {(["oral", "poster", "either"] as const).map((v) => (
+                {presentationOptions.map(({ value: v, label }) => (
                   <Label
                     key={v}
                     className="flex min-h-control items-center gap-3 rounded-md border border-border px-4 text-base font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary-tint"
                   >
                     <RadioGroupItem value={v} />
-                    {PRESENTATION_LABEL[v]}
+                    {label}
                   </Label>
                 ))}
               </RadioGroup>
@@ -1355,7 +1476,7 @@ export function SubmissionFormWizard({
               <dl className="divide-y divide-border">
                 {[
                   { step: 1 as WizardStep, label: "Type and track", value: `${currentSubmissionType?.name ?? "—"} · ${categories.find((c) => c.id === selectedCategoryId)?.name ?? "No track"}` },
-                  { step: 1 as WizardStep, label: "Presentation", value: PRESENTATION_LABEL[preferredPresentation] ?? preferredPresentation },
+                  { step: 1 as WizardStep, label: "Presentation", value: presentationLabel },
                   { step: 2 as WizardStep, label: "Length", value: `${totalWordCount} of ${maxWords} words · ${keywords.length} keyword${keywords.length === 1 ? "" : "s"}` },
                   { step: 3 as WizardStep, label: "Authors", value: `${authors.length} author${authors.length === 1 ? "" : "s"}${presenter ? ` · ${presenter.surname} ${presenter.initials} presenting` : ""}` },
                   { step: 4 as WizardStep, label: "Ethics", value: ercStatus ? `${ercStatus === "NOT_APPLICABLE" ? "Not applicable" : ercStatus === "APPROVED" ? "Approved" : "Exempt"}${ercRefNo ? ` · ${ercRefNo}` : ""}${ercFileUploaded ? " · certificate uploaded" : ""}` : "Not given" },

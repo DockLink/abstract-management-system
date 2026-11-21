@@ -138,6 +138,9 @@ export type OrgShellData = {
   org: { id: string; slug: string; name: string };
   user: ShellUser | null;
   reviewsAnywhere: boolean;
+  /** Presentation only: shows the Team link. The API enforces org admin. */
+  canManageOrg: boolean;
+  isPlatformAdmin: boolean;
 };
 
 export async function loadOrgShellData(orgSlug: string): Promise<OrgShellData> {
@@ -146,5 +149,9 @@ export async function loadOrgShellData(orgSlug: string): Promise<OrgShellData> {
     org: { id: org.id, slug: org.slug, name: org.name },
     user: me ? toUser(me) : null,
     reviewsAnywhere: !!me?.eventRoles.some((r) => r.role === "REVIEWER"),
+    canManageOrg:
+      !!me?.isPlatformAdmin ||
+      !!me?.organisations.some((m) => m.organisation.id === org.id && m.role === "ORG_ADMIN"),
+    isPlatformAdmin: !!me?.isPlatformAdmin,
   };
 }

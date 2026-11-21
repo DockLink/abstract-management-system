@@ -10,6 +10,7 @@ import { FormSection } from "@/components/shared/form-section";
 import { PageHeader } from "@/components/shared/page-header";
 import { SidePanel } from "@/components/shared/side-panel";
 import { toast } from "@/components/shared/toast";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { brandForeground, contrastRatio, DEFAULT_BRAND, isValidBrandColor } from "@/lib/theme/brand";
@@ -74,6 +75,8 @@ export function SettingsPage({
   const [extErrors, setExtErrors] = useState<{ submitter?: string; until?: string }>({});
 
   const [extensions, setExtensions] = useState<DeadlineExtensionDto[]>([]);
+  const [revokeTarget, setRevokeTarget] = useState<DeadlineExtensionDto | null>(null);
+  const [revoking, setRevoking] = useState(false);
   const [roles, setRoles] = useState<EventRoleDto[]>([]);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -201,6 +204,26 @@ export function SettingsPage({
     }
   }
 
+  async function confirmRevokeExtension() {
+    if (!revokeTarget) return;
+    setRevoking(true);
+    try {
+      const result = await apiFetch(
+        `${base}/deadline-extensions?id=${encodeURIComponent(revokeTarget.id)}`,
+        { method: "DELETE" },
+      );
+      if (!result.ok) {
+        toast.error("Couldn't revoke the extension", { description: result.error.message });
+        return;
+      }
+      toast.success("Extension revoked");
+      setRevokeTarget(null);
+      await loadAux();
+    } finally {
+      setRevoking(false);
+    }
+  }
+
   async function submitExtension() {
     const errors: { submitter?: string; until?: string } = {};
     if (!submitterUserId) errors.submitter = "Choose who gets the extension.";
@@ -297,6 +320,16 @@ export function SettingsPage({
             columns={extColumns}
             rows={extensions}
             getRowId={(e) => e.id}
+            rowActions={(e) => (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setRevokeTarget(e)}
+              >
+                Revoke<span className="sr-only"> extension for {submitterLabel(e.submitterUserId)}</span>
+              </Button>
+            )}
             loading={settingsLoading}
             error={settingsError}
             onRetry={() => {
@@ -491,6 +524,23 @@ export function SettingsPage({
           </FormField>
         </div>
       </SidePanel>
+
+      <ConfirmDialog
+        open={Boolean(revokeTarget)}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Revoke this extension?"
+        description={
+          revokeTarget
+            ? `${submitterLabel(revokeTarget.submitterUserId)} goes back to the event's normal deadline. If it has passed, they can no longer edit or submit.`
+            : "This extension will be removed."
+        }
+        confirmLabel="Revoke extension"
+        destructive
+        loading={revoking}
+        onConfirm={confirmRevokeExtension}
+      />
     </div>
   );
 }

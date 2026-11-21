@@ -3,12 +3,23 @@ import { prisma } from "@/lib/db/prisma";
 import { unauthorized } from "@/lib/api/response";
 import type { User } from "@/app/generated/prisma/client";
 
+function publishableKey() {
+  return (
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    // Legacy key: remove once it is disabled in Supabase.
+    process.env.SUPABASE_ANON_KEY
+  );
+}
+
 export function getSupabaseAdmin() {
   const url = process.env.SUPABASE_URL;
+  // Never fall back to a public key: admin calls would fail with confusing errors.
   const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+    process.env.SUPABASE_SECRET_KEY ||
+    // Legacy key: remove once it is disabled in Supabase.
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
+    throw new Error("SUPABASE_URL and SUPABASE_SECRET_KEY are required");
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -17,10 +28,9 @@ export function getSupabaseAdmin() {
 
 export function getSupabaseAnon() {
   const url = process.env.SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
+  const key = publishableKey();
   if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY are required");
+    throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required");
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -80,10 +90,9 @@ export async function upsertAppUser(
 
 export function getSupabaseUserClient(accessToken: string) {
   const url = process.env.SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
+  const key = publishableKey();
   if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY are required");
+    throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required");
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },

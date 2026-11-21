@@ -35,6 +35,7 @@ export const ROUTES: RouteCheck[] = [
   { name: "admin submission types", path: `${admin}/submission-types`, as: "eventadmin" },
   { name: "admin eligibility", path: `${admin}/eligibility`, as: "eventadmin" },
   { name: "admin members", path: `${admin}/members`, as: "eventadmin" },
+  { name: "admin team", path: `${admin}/team`, as: "eventadmin" },
   { name: "admin submissions", path: `${admin}/submissions`, as: "eventadmin" },
   { name: "admin reviews", path: `${admin}/reviews`, as: "eventadmin" },
   { name: "chair reviews", path: `${admin}/reviews`, as: "multi" },

@@ -7,7 +7,7 @@ import type { PublicEventDto } from "@/lib/types/api";
 
 export const instant = false;
 
-const NON_EVENT_SEGMENTS = new Set(["org", "login", "my-reviews", "dev", "api", "api-docs", "swagger-ui"]);
+const NON_EVENT_SEGMENTS = new Set(["org", "login", "auth", "platform", "my-reviews", "dev", "api", "api-docs", "swagger-ui"]);
 
 /** If `next` points into an event's portal, brand the page for that event. */
 async function eventFromNext(next: string | undefined) {
