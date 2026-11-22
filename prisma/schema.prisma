@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Abstract Management System — Module 1 schema
+// https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,686 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum OrgRole {
+  ORG_ADMIN
+  MEMBER
+}
+
+enum EventRoleType {
+  EVENT_ADMIN
+  TRACK_CHAIR
+  REVIEWER
+  FINANCE_OFFICER
+  SUBMITTER
+  DELEGATE
+}
+
+enum BlindMode {
+  NONE
+  SINGLE
+  DOUBLE
+}
+
+enum PresentationTypeCode {
+  ORAL
+  POSTER
+  ORAL_OR_POSTER
+}
+
+enum ReviewerInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum ReviewAssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CONFLICT
+}
+
+enum ReviewRecommendation {
+  ACCEPT_ORAL
+  ACCEPT_POSTER
+  REJECT
+  REVISE
+}
+
+// ─── Prerequisites (no Module 1 CRUD APIs) ───────────────────────────────────
+
+model Organisation {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoPath  String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships        OrgMembership[]
+  events             Event[]
+  members            Member[]
+  auditLogs          AuditLog[]
+  categories         Category[]
+  submissionTypes    SubmissionType[]
+  presentationTypes  PresentationType[]
+  eligibilityRules   EligibilityRule[]
+  deadlineExtensions DeadlineExtension[]
+  formFields         FormField[]
+  submissions        Submission[]
+  rubricCriteria     RubricCriterion[]
+  reviewAssignments  ReviewAssignment[]
+  reviews            Review[]
+  emailTemplates     EmailTemplate[]
+  emailLogs          EmailLog[]
+
+  @@map("organisations")
+}
+
+model User {
+  id        String   @id // Supabase auth.users.id
+  email     String   @unique
+  fullName  String?
+  phone     String?
+  slmcNo      String?
+  institution String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships        OrgMembership[]
+  eventRoles         EventRole[]
+  chairedCategories  Category[]          @relation("CategoryChair")
+  deadlineExtensions DeadlineExtension[] @relation("ExtensionSubmitter")
+  createdExtensions  DeadlineExtension[] @relation("ExtensionCreator")
+  auditLogs          AuditLog[]
+  submissions        Submission[]        @relation("SubmissionSubmitter")
+  submissionVersions SubmissionVersion[] @relation("VersionCreator")
+  reviewAssignments  ReviewAssignment[]  @relation("ReviewerAssignments")
+  decidedSubmissions Submission[]        @relation("SubmissionDecidedBy")
+
+  @@map("users")
+}
+
+model OrgMembership {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  role      OrgRole  @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+  @@map("org_memberships")
+}
+
+model EventRole {
+  id                      String                @id @default(cuid())
+  eventId                 String
+  userId                  String
+  role                    EventRoleType
+  categoryIds             String[]              @default([])
+  maxLoad                 Int?                  @default(20)
+  invitationStatus        ReviewerInviteStatus? @default(PENDING)
+  confidentialityAgreedAt DateTime?
+  /// Module 4: lets a track chair make final decisions in their categories
+  canMakeFinalDecisions   Boolean               @default(false)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, role])
+  @@index([userId])
+  @@map("event_roles")
+}
+
+// ─── Module 1 — Event setup ──────────────────────────────────────────────────
+
+model Event {
+  id      String  @id @default(cuid())
+  orgId   String
+  name    String
+  slug    String
+  edition String?
+  venue   String?
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  logoPath           String?
+  bannerPath         String?
+  contactEmail       String?
+  contactPhone       String?
+  guidelinesRichText String?
+  guidelinesPdfPath  String?
+  primaryColor       String?
+  blindMode          BlindMode @default(DOUBLE)
+  settings           Json      @default("{}")
+
+  // Key dates (UTC; display Asia/Colombo)
+  submissionOpenAt    DateTime?
+  submissionCloseAt   DateTime?
+  reviewDeadlineAt    DateTime?
+  notificationAt      DateTime?
+  earlyBirdEndAt      DateTime?
+  registrationCloseAt DateTime?
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  organisation       Organisation        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  roles              EventRole[]
+  categories         Category[]
+  submissionTypes    SubmissionType[]
+  presentationTypes  PresentationType[]
+  eligibilityRule    EligibilityRule?
+  deadlineExtensions DeadlineExtension[]
+  auditLogs          AuditLog[]
+  submissions        Submission[]
+  formFields         FormField[]
+  rubricCriteria     RubricCriterion[]
+  reviewAssignments  ReviewAssignment[]
+  reviews            Review[]
+  emailTemplates     EmailTemplate[]
+  emailLogs          EmailLog[]
+
+  @@unique([orgId, slug])
+  @@index([orgId])
+  @@map("events")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  orgId       String
+  eventId     String
+  name        String
+  chairUserId String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  chair        User?        @relation("CategoryChair", fields: [chairUserId], references: [id], onDelete: SetNull)
+  submissions  Submission[]
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("categories")
+}
+
+model SubmissionType {
+  id          String   @id @default(cuid())
+  orgId       String
+  eventId     String
+  name        String
+  wordLimit   Int      @default(300)
+  /// Default IMRaD sections; editable per type
+  sections    Json     @default("[{\"key\":\"introduction\",\"label\":\"Introduction\"},{\"key\":\"objectives\",\"label\":\"Objectives\"},{\"key\":\"methods\",\"label\":\"Methods\"},{\"key\":\"results\",\"label\":\"Results\"},{\"key\":\"conclusions\",\"label\":\"Conclusions\"}]")
+  requiresErc Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  formFields   FormField[]
+  submissions  Submission[]
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("submission_types")
+}
+
+model PresentationType {
+  id        String               @id @default(cuid())
+  orgId     String
+  eventId   String
+  code      PresentationTypeCode
+  label     String
+  isActive  Boolean              @default(true)
+  sortOrder Int                  @default(0)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, code])
+  @@index([eventId])
+  @@index([orgId])
+  @@map("presentation_types")
+}
+
+model EligibilityRule {
+  id                           String   @id @default(cuid())
+  orgId                        String
+  eventId                      String   @unique
+  maxAbstractsPerAuthor        Int      @default(2)
+  requireMemberAuthor          Boolean  @default(false)
+  presentingAuthorMustRegister Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("eligibility_rules")
+}
+
+model Member {
+  id           String   @id @default(cuid())
+  orgId        String
+  name         String
+  membershipNo String?
+  slmcNo       String?
+  email        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, membershipNo])
+  @@index([orgId, email])
+  @@map("members")
+}
+
+model DeadlineExtension {
+  id              String   @id @default(cuid())
+  orgId           String
+  eventId         String
+  submitterUserId String
+  extendsUntil    DateTime
+  reason          String?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submitter    User         @relation("ExtensionSubmitter", fields: [submitterUserId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ExtensionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submitterUserId])
+  @@map("deadline_extensions")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  eventId   String?
+  actorId   String
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  actor        User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([eventId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+// ─── Module 2 — Submission Portal ────────────────────────────────────────────
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISIONS_REQUESTED
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+  CONFIRMED
+  WITHDRAWN
+}
+
+enum ErcStatus {
+  APPROVED
+  EXEMPT
+  NOT_APPLICABLE
+}
+
+enum FormFieldType {
+  TEXT
+  LONG_TEXT
+  DROPDOWN
+  CHECKBOX
+  RADIO
+  FILE_UPLOAD
+  NUMBER
+  DATE
+}
+
+model FormField {
+  id               String        @id @default(cuid())
+  orgId            String
+  eventId          String
+  submissionTypeId String
+  label            String
+  type             FormFieldType
+  options          Json?
+  required         Boolean       @default(false)
+  helpText         String?
+  sortOrder        Int           @default(0)
+  condition        Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  organisation   Organisation   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submissionType SubmissionType @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
+
+  @@index([submissionTypeId])
+  @@index([eventId])
+  @@index([orgId])
+  @@map("form_fields")
+}
+
+model Submission {
+  id                        String           @id @default(cuid())
+  orgId                     String
+  eventId                   String
+  refNo                     String?
+  submitterId               String
+  submissionTypeId          String
+  categoryId                String?
+  title                     String
+  status                    SubmissionStatus @default(DRAFT)
+  preferredPresentationType String?
+  abstractBody              Json
+  keywords                  String[]         @default([])
+  wordCount                 Int              @default(0)
+  customFieldValues         Json             @default("{}")
+  ercStatus                 ErcStatus?
+  ercInstitution            String?
+  ercRefNo                  String?
+  ercFilePath               String?
+  prevPublishedDetails      String?
+  declarations              Json             @default("{}")
+  submittedAt               DateTime?
+  withdrawnAt               DateTime?
+
+  // ── Module 4 — Decisions ──
+  // The decision is held here and stays hidden from the author until it is
+  // released (DEC-04). Only release moves `status`.
+  decision              DecisionOutcome?
+  decisionSource        DecisionSource?
+  decisionNote          String?
+  decidedAt             DateTime?
+  decidedById           String?
+  chairRecommendation   DecisionOutcome?
+  chairRecommendedById  String?
+  chairRecommendedAt    DateTime?
+  presentationType      PresentationTypeCode?
+  decisionReleasedAt    DateTime?
+  reviewsReleased       Boolean          @default(false)
+  revisionDueAt         DateTime?
+  slotResponse          SlotResponse?
+  slotRespondedAt       DateTime?
+  /// DEC-08: the waitlisted submission that was offered this declined slot
+  slotFilledById        String?
+  confirmedAt           DateTime?
+  registrationFlaggedAt DateTime?
+
+  deletedAt                 DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  organisation   Organisation            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event          Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submitter      User                    @relation("SubmissionSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  decidedBy      User?                   @relation("SubmissionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  submissionType SubmissionType          @relation(fields: [submissionTypeId], references: [id], onDelete: Cascade)
+  category       Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  authors           SubmissionAuthor[]
+  affiliations      SubmissionAffiliation[]
+  versions          SubmissionVersion[]
+  reviewAssignments ReviewAssignment[]
+  emailLogs         EmailLog[]
+
+  @@unique([eventId, refNo])
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submitterId])
+  @@index([eventId, decision])
+  @@map("submissions")
+}
+
+model SubmissionAuthor {
+  id              String   @id @default(cuid())
+  submissionId    String
+  surname         String
+  initials        String
+  email           String
+  institution     String?
+  designation     String?
+  slmcNo          String?
+  membershipNo    String?
+  affiliationNos  Int[]    @default([])
+  isPresenting    Boolean  @default(false)
+  isCorresponding Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("submission_authors")
+}
+
+model SubmissionAffiliation {
+  id           String   @id @default(cuid())
+  submissionId String
+  number       Int
+  text         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, number])
+  @@index([submissionId])
+  @@map("submission_affiliations")
+}
+
+model SubmissionVersion {
+  id           String   @id @default(cuid())
+  submissionId String
+  version      Int
+  content      Json
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("VersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, version])
+  @@index([submissionId])
+  @@map("submission_versions")
+}
+
+// ─── Module 3 — Review Portal ────────────────────────────────────────────────
+
+model RubricCriterion {
+  id          String   @id @default(cuid())
+  orgId       String
+  eventId     String
+  name        String
+  description String?
+  scaleMin    Int      @default(1)
+  scaleMax    Int      @default(5)
+  weight      Float    @default(1.0)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organisation Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  scores       ReviewScore[]
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("rubric_criteria")
+}
+
+model ReviewAssignment {
+  id           String                 @id @default(cuid())
+  orgId        String
+  eventId      String
+  submissionId String
+  reviewerId   String
+  status       ReviewAssignmentStatus @default(PENDING)
+  dueAt        DateTime?
+  coiReason    String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submission   Submission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer     User         @relation("ReviewerAssignments", fields: [reviewerId], references: [id], onDelete: Cascade)
+  review       Review?
+
+  @@unique([submissionId, reviewerId])
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submissionId])
+  @@index([reviewerId])
+  @@index([status])
+  @@map("review_assignments")
+}
+
+model Review {
+  id               String                @id @default(cuid())
+  orgId            String
+  eventId          String
+  assignmentId     String                @unique
+  recommendation   ReviewRecommendation?
+  commentAuthor    String?
+  commentCommittee String?
+  isDraft          Boolean               @default(true)
+  submittedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  organisation Organisation     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignment   ReviewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  scores       ReviewScore[]
+
+  @@index([eventId])
+  @@index([orgId])
+  @@map("reviews")
+}
+
+model ReviewScore {
+  id          String   @id @default(cuid())
+  reviewId    String
+  criterionId String
+  score       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  review    Review          @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  criterion RubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, criterionId])
+  @@index([reviewId])
+  @@index([criterionId])
+  @@map("review_scores")
+}
+
+// ─── Module 4 — Decisions and notifications ─────────────────────────────────
+
+enum DecisionOutcome {
+  ACCEPT_ORAL
+  ACCEPT_POSTER
+  REJECT
+  REVISIONS_REQUESTED
+  WAITLIST
+}
+
+enum DecisionSource {
+  MANUAL
+  CUTOFF
+}
+
+enum SlotResponse {
+  CONFIRMED
+  DECLINED
+}
+
+enum EmailDeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+  NOT_CONFIGURED
+}
+
+/// GEN-03 / DEC-05: editable email template per event and key
+/// (e.g. "decision.accept_oral"). Missing rows fall back to built-in defaults.
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  eventId   String
+  key       String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, key])
+  @@index([orgId])
+  @@map("email_templates")
+}
+
+/// GEN-03: one row per email the system tried to send.
+model EmailLog {
+  id           String              @id @default(cuid())
+  orgId        String
+  eventId      String
+  submissionId String?
+  templateKey  String
+  toEmail      String
+  subject      String
+  body         String
+  status       EmailDeliveryStatus @default(QUEUED)
+  error        String?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+
+  organisation Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submission   Submission?  @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([orgId])
+  @@index([submissionId])
+  @@map("email_logs")
 }

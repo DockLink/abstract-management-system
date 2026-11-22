@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -41,3 +42,25 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+
+# Playwright & automation artifacts
+/.playwright-mcp/
+/e2e/.auth/
+/test-results/
+/playwright-report/
+/blob-report/
+
+# Screenshots, captures, and images
+docs/ui-audit/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+# Allow images in public directory if needed
+!public/**/*.png
+!public/**/*.jpg
+!public/**/*.jpeg
+!public/**/*.webp
+!public/**/*.gif
+
